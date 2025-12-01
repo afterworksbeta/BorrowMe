@@ -3,9 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Input, Button, Toggle, PasswordInput } from './Common';
 import { User } from '../types';
 import * as DB from '../services/db';
-import { User as UserIcon, Shield, Settings, CheckCircle2, Upload, Trash2, UserPlus, Users } from 'lucide-react';
+import { User as UserIcon, Shield, Settings, CheckCircle2, Upload, Trash2, UserPlus, Users, Search, Mail, AlertTriangle } from 'lucide-react';
 
-type SettingsTab = 'profile' | 'security' | 'account' | 'admin';
+type SettingsTab = 'profile' | 'security' | 'account' | 'admin' | 'users';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -36,7 +36,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentU
         isOpen={isOpen} 
         onClose={onClose} 
         title="ตั้งค่าโปรไฟล์" 
-        maxWidth="max-w-2xl"
+        maxWidth={activeTab === 'users' ? "max-w-4xl" : "max-w-2xl"}
     >
         <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
             <TabBtn active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} icon={<UserIcon size={16} />} label="โปรไฟล์" />
@@ -44,7 +44,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentU
             <TabBtn active={activeTab === 'account'} onClick={() => setActiveTab('account')} icon={<Settings size={16} />} label="บัญชี & ความเป็นส่วนตัว" />
             
             {currentUser.role === 'admin' && (
-                <TabBtn active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} icon={<Users size={16} />} label="ผู้ดูแลระบบ" />
+                <>
+                    <TabBtn active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} icon={<UserPlus size={16} />} label="ผู้ดูแลระบบ" />
+                    <TabBtn active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={16} />} label="จัดการผู้ใช้" />
+                </>
             )}
         </div>
 
@@ -58,6 +61,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, currentU
         {activeTab === 'security' && <SecurityTab user={currentUser} onSuccess={showSuccess} />}
         {activeTab === 'account' && <AccountTab user={currentUser} onSuccess={showSuccess} />}
         {activeTab === 'admin' && currentUser.role === 'admin' && <AdminTab user={currentUser} onSuccess={showSuccess} />}
+        {activeTab === 'users' && currentUser.role === 'admin' && <UsersManagementTab currentUser={currentUser} onSuccess={showSuccess} />}
 
     </Modal>
   );
@@ -325,6 +329,262 @@ const AdminTab = ({ user, onSuccess }: { user: User, onSuccess: (msg: string) =>
                     </Button>
                 </div>
             </div>
+        </div>
+    );
+};
+
+const UsersManagementTab = ({ currentUser, onSuccess }: { currentUser: User, onSuccess: (msg: string) => void }) => {
+    const [users, setUsers] = useState<User[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+    const [loading, setLoading] = useState(true);
+
+    // Message Modal State
+    const [msgModalUser, setMsgModalUser] = useState<User | null>(null);
+    const [msgSubject, setMsgSubject] = useState('');
+    const [msgBody, setMsgBody] = useState('');
+
+    // Delete Modal State
+    const [deleteModalUser, setDeleteModalUser] = useState<User | null>(null);
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+
+    useEffect(() => {
+        setUsers(DB.getAllUsers());
+        setLoading(false);
+    }, []);
+
+    const filteredUsers = users.filter(u => {
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
+        const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+        
+        // Hide the current user from the list
+        if (u.userId === currentUser.userId) return false;
+
+        return matchesSearch && matchesRole;
+    });
+
+    const handleSendMessage = () => {
+        if (!msgModalUser) return;
+        DB.adminSendUserMessage(msgModalUser.userId, msgSubject, msgBody);
+        onSuccess(`ส่งข้อความถึง ${msgModalUser.name} แล้ว`);
+        setMsgModalUser(null);
+        setMsgSubject('');
+        setMsgBody('');
+    };
+
+    const handleDeleteUser = () => {
+        if (!deleteModalUser) return;
+        const result = DB.adminDeleteUser(currentUser.userId, deleteModalUser.userId);
+        if (result.success) {
+            setUsers(prev => prev.filter(u => u.userId !== deleteModalUser.userId));
+            onSuccess(`ลบบัญชี ${deleteModalUser.name} เรียบร้อยแล้ว`);
+        } else {
+            alert(result.message || 'ไม่สามารถลบบัญชีนี้ได้');
+        }
+        setDeleteModalUser(null);
+        setDeleteConfirmInput('');
+    };
+
+    return (
+        <div>
+             <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
+                 <div>
+                    <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                        <Users size={18} /> จัดการผู้ใช้ทั้งหมด
+                    </h4>
+                    <p className="text-sm text-gray-500">รายชื่อผู้ใช้ทั้งหมดในระบบ ({users.length} คน)</p>
+                 </div>
+                 
+                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    {/* Role Filter */}
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setRoleFilter('all')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${roleFilter === 'all' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+                        >
+                            ทั้งหมด
+                        </button>
+                        <button 
+                            onClick={() => setRoleFilter('admin')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${roleFilter === 'admin' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+                        >
+                            Admin
+                        </button>
+                        <button 
+                            onClick={() => setRoleFilter('user')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${roleFilter === 'user' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
+                        >
+                            User
+                        </button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative w-full sm:w-64">
+                        <input 
+                            type="text" 
+                            placeholder="ค้นหาชื่อหรืออีเมล..." 
+                            className="w-full bg-gray-100 border border-gray-300 text-gray-900 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                    </div>
+                 </div>
+             </div>
+
+             <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 text-gray-900 font-semibold border-b border-gray-200">
+                        <tr>
+                            <th className="py-3 px-4">ชื่อผู้ใช้</th>
+                            <th className="py-3 px-4">บทบาท</th>
+                            <th className="py-3 px-4">วันที่สมัคร</th>
+                            <th className="py-3 px-4 text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {loading ? (
+                            <tr><td colSpan={4} className="p-4 text-center">กำลังโหลด...</td></tr>
+                        ) : filteredUsers.length === 0 ? (
+                            <tr><td colSpan={4} className="p-4 text-center text-gray-500">ไม่พบผู้ใช้ที่ค้นหา</td></tr>
+                        ) : (
+                            filteredUsers.map(u => {
+                                const isMainAdminTarget = u.email === 'admin@example.com';
+                                const isCurrentMainAdmin = currentUser.email === 'admin@example.com';
+                                const canDelete = !isMainAdminTarget || isCurrentMainAdmin;
+
+                                return (
+                                <tr key={u.userId} className="hover:bg-gray-50 group">
+                                    <td className="py-3 px-4">
+                                        <div className="font-medium text-gray-900">{u.name}</div>
+                                        <div className="text-xs text-gray-500">{u.email}</div>
+                                        {u.phone && <div className="text-xs text-gray-400">{u.phone}</div>}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        {u.role === 'admin' ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                                Admin
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                                                User
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="py-3 px-4 text-gray-500">
+                                        {new Date(u.createdAt).toLocaleDateString('th-TH')}
+                                    </td>
+                                    <td className="py-3 px-4 text-right">
+                                        <div className="flex justify-end gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button 
+                                                size="sm" 
+                                                variant="secondary" 
+                                                onClick={() => setMsgModalUser(u)}
+                                                title="ส่งข้อความ"
+                                                className="px-2"
+                                            >
+                                                <Mail size={14} />
+                                            </Button>
+                                            
+                                            {canDelete ? (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="danger" 
+                                                    onClick={() => setDeleteModalUser(u)}
+                                                    title="ลบบัญชี"
+                                                    className="px-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </Button>
+                                            ) : (
+                                                <div className="px-2 py-1.5 opacity-30 cursor-not-allowed" title="ลบผู้ดูแลระบบหลักไม่ได้">
+                                                    <Trash2 size={14} className="text-gray-400" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            )})
+                        )}
+                    </tbody>
+                </table>
+             </div>
+
+             {/* Message Modal */}
+             <Modal
+                isOpen={!!msgModalUser}
+                onClose={() => setMsgModalUser(null)}
+                title={`ส่งข้อความถึง ${msgModalUser?.name}`}
+                maxWidth="max-w-md"
+                footer={
+                    <div className="flex gap-3 w-full">
+                        <Button variant="secondary" className="flex-1" onClick={() => setMsgModalUser(null)}>ยกเลิก</Button>
+                        <Button className="flex-1" onClick={handleSendMessage} disabled={!msgSubject || !msgBody}>ส่งข้อความ</Button>
+                    </div>
+                }
+             >
+                <div className="space-y-4">
+                    <Input 
+                        label="หัวข้อ"
+                        value={msgSubject}
+                        onChange={(e) => setMsgSubject(e.target.value)}
+                        placeholder="เช่น แจ้งเตือนการคืนของ"
+                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-800 mb-1">ข้อความ</label>
+                        <textarea 
+                            className="w-full bg-gray-100 border border-gray-300 text-gray-900 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all min-h-[100px]"
+                            value={msgBody}
+                            onChange={(e) => setMsgBody(e.target.value)}
+                            placeholder="รายละเอียดข้อความ..."
+                        />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                        * ระบบจะส่งอีเมลไปยัง {msgModalUser?.email}
+                    </p>
+                </div>
+             </Modal>
+
+             {/* Delete Modal */}
+             <Modal
+                isOpen={!!deleteModalUser}
+                onClose={() => { setDeleteModalUser(null); setDeleteConfirmInput(''); }}
+                title="ยืนยันการลบบัญชี"
+                maxWidth="max-w-md"
+                footer={
+                    <div className="flex gap-3 w-full">
+                        <Button variant="secondary" className="flex-1" onClick={() => { setDeleteModalUser(null); setDeleteConfirmInput(''); }}>ยกเลิก</Button>
+                        <Button 
+                            variant="danger" 
+                            className="flex-1" 
+                            onClick={handleDeleteUser}
+                            disabled={deleteConfirmInput !== 'DELETE'}
+                        >
+                            ยืนยันลบ
+                        </Button>
+                    </div>
+                }
+             >
+                <div className="text-center py-4">
+                    <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <AlertTriangle size={24} />
+                    </div>
+                    <h4 className="font-bold text-gray-900 mb-2">คุณต้องการลบบัญชี "{deleteModalUser?.name}" ใช่หรือไม่?</h4>
+                    <p className="text-sm text-gray-600 mb-4">
+                        การดำเนินการนี้ไม่สามารถย้อนกลับได้ ประวัติการใช้งานของผู้ใช้นี้อาจได้รับผลกระทบ
+                    </p>
+                    <div className="text-left">
+                        <label className="block text-xs font-bold text-gray-700 mb-1">พิมพ์คำว่า "DELETE" เพื่อยืนยัน</label>
+                        <input 
+                             className="w-full border border-red-300 bg-white text-gray-900 rounded-lg p-2 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                             value={deleteConfirmInput}
+                             onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                             placeholder="DELETE"
+                        />
+                    </div>
+                </div>
+             </Modal>
         </div>
     );
 };

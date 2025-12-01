@@ -9,10 +9,21 @@ interface AdminDashboardProps {
   boxes: PopulatedBox[];
   records: Record[];
   items: Item[];
+  initialTab?: 'boxes' | 'approvals' | 'history';
+  navigationTick?: number;
+  onDeleteRecords?: (recordIds: string[]) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ boxes, records, items }) => {
-  const [activeTab, setActiveTab] = useState<'boxes' | 'approvals' | 'history'>('boxes');
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ boxes, records, items, initialTab, navigationTick, onDeleteRecords }) => {
+  const [activeTab, setActiveTab] = useState<'boxes' | 'approvals' | 'history'>(initialTab || 'boxes');
+
+  // Sync activeTab when initialTab prop changes (e.g. from notification click)
+  // navigationTick ensures this effect runs even if initialTab value is the same string
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, navigationTick]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -25,7 +36,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ boxes, records, items }
       <div className="bg-white rounded-xl shadow-sm p-6 min-h-[500px]">
         {activeTab === 'boxes' && <BoxManagementView boxes={boxes} />}
         {activeTab === 'approvals' && <ApprovalsView records={records} items={items} boxes={boxes} />}
-        {activeTab === 'history' && <HistoryView records={records} boxes={boxes} items={items} />}
+        {activeTab === 'history' && <HistoryView records={records} boxes={boxes} items={items} onDeleteRecords={onDeleteRecords} />}
       </div>
     </div>
   );
@@ -55,11 +66,16 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
     name: '', type: '', coverFile: null, coverUrlPreview: '', items: []
   });
   
+  const [error, setError] = useState<string | null>(null);
   const [deleteTargetBox, setDeleteTargetBox] = useState<PopulatedBox | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCreate = () => {
-    if(!formData.name) return;
+    setError(null);
+    if(!formData.name.trim() || !formData.type.trim()) {
+        setError('กรุณากรอกข้อมูลให้ครบถ้วน');
+        return;
+    }
     
     let coverUrl = formData.coverUrlPreview;
     if (formData.coverFile) {
@@ -106,6 +122,7 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
           coverUrlPreview: box.coverImageUrl,
           items: aggregatedItems.length > 0 ? aggregatedItems : []
       });
+      setError(null);
       setIsModalOpen(true);
   };
   
@@ -152,6 +169,7 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
         <Button onClick={() => {
             setEditingBoxId(null);
             setFormData({ name: '', type: '', coverFile: null, coverUrlPreview: '', items: [] });
+            setError(null);
             setIsModalOpen(true);
         }} size="sm">
           <Plus className="w-4 h-4 mr-2" /> เพิ่มกล่องใหม่
@@ -198,6 +216,12 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
         footer={<Button className="w-full" onClick={handleCreate}>{editingBoxId ? "บันทึกการแก้ไข" : "บันทึกกล่อง"}</Button>}
       >
         <div className="space-y-4">
+            {error && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                    <AlertTriangle size={16} />
+                    {error}
+                </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
                 <Input 
                     label="ชื่อกล่อง" 
@@ -255,9 +279,14 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                                     }
                                 }}/>
                                 <div className="flex items-center gap-2">
-                                    <Button type="button" variant="outline" size="sm" className="h-9 px-3 text-xs" onClick={() => document.getElementById(`item-upload-${idx}`)?.click()}>
-                                        <Upload className="w-3 h-3 mr-1" /> อัปโหลดรูป
-                                    </Button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => document.getElementById(`item-upload-${idx}`)?.click()}
+                                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 whitespace-nowrap"
+                                    >
+                                        <Upload className="w-3 h-3" />
+                                        <span>อัปโหลดรูป</span>
+                                    </button>
                                     {item.img && <img src={item.img} className="w-9 h-9 rounded object-cover border border-gray-200" alt="Preview" />}
                                 </div>
                             </div>
@@ -308,6 +337,22 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
     });
 
     const [selectedGroup, setSelectedGroup] = useState<Record[] | null>(null);
+
+    // Grouping helper for the modal display
+    const groupedSelectedItems = useMemo(() => {
+        if (!selectedGroup) return [];
+        const grouped: { [key: string]: { name: string, img: string, count: number } } = {};
+        selectedGroup.forEach(r => {
+            const item = items.find(i => i.itemId === r.itemId);
+            if (!item) return;
+            if (!grouped[item.itemName]) {
+                grouped[item.itemName] = { name: item.itemName, img: item.itemImageUrl, count: 0 };
+            }
+            grouped[item.itemName].count++;
+        });
+        return Object.values(grouped);
+    }, [selectedGroup, items]);
+
 
     // 2. Handle Approval Action with Logging
     const handleApprove = (isApproved: boolean) => {
@@ -376,15 +421,15 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
                         <div>
                             <h4 className="font-bold mb-2 text-gray-900">รายการที่คืน ({selectedGroup.length})</h4>
                             <div className="space-y-2">
-                                {selectedGroup.map(r => {
-                                    const item = items.find(i => i.itemId === r.itemId);
-                                    return (
-                                        <div key={r.recordId} className="flex items-center gap-3 border border-gray-200 p-2 rounded hover:bg-white">
-                                            <img src={item?.itemImageUrl} className="w-10 h-10 object-cover rounded" alt=""/>
-                                            <span className="text-sm font-medium text-gray-800">{item?.itemName}</span>
+                                {groupedSelectedItems.map((g, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 border border-gray-200 p-2 rounded hover:bg-white">
+                                        <img src={g.img} className="w-10 h-10 object-cover rounded" alt=""/>
+                                        <div>
+                                            <span className="text-sm font-medium text-gray-800 block">{g.name}</span>
+                                            {g.count > 1 && <span className="text-xs text-gray-500">จำนวน {g.count} รายการ</span>}
                                         </div>
-                                    )
-                                })}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                         {selectedGroup[0].proofImageUrl && (
@@ -408,6 +453,7 @@ type HistoryGroup = {
     recordIds: string[];
     status: RecordStatus;
     borrowedAt: string;
+    daysBorrowed: number; // For Due Date Calculation
     userName: string;
     userEmail: string;
     returnedAt: string | null;
@@ -421,7 +467,31 @@ const arraysEqual = (a: string[], b: string[]) => {
   return b.every(v => setA.has(v));
 };
 
-const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: PopulatedBox[] }> = ({ records, items, boxes }) => {
+// Helper to calculate due status text
+const getDueStatus = (borrowedAtStr: string, daysBorrowed: number, status: string) => {
+  if (status === 'returned') return null;
+
+  const now = new Date();
+  const borrowed = new Date(borrowedAtStr);
+  const dueDate = new Date(borrowed.getTime() + daysBorrowed * 24 * 60 * 60 * 1000);
+
+  // Reset time for date comparison
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDateDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+
+  const diffTime = dueDateDate.getTime() - todayDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays > 0) {
+    return { label: `อีก ${diffDays} วันถึงกำหนดคืน`, className: "text-gray-500" };
+  } else if (diffDays === 0) {
+    return { label: "ถึงกำหนดคืนวันนี้", className: "text-orange-600 font-bold" };
+  } else {
+    return { label: `เกินกำหนดคืน ${Math.abs(diffDays)} วันแล้ว`, className: "text-red-600 font-bold" };
+  }
+};
+
+const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: PopulatedBox[], onDeleteRecords?: (ids: string[]) => void }> = ({ records, items, boxes, onDeleteRecords }) => {
     // 1. Filter state using new statuses
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -451,6 +521,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                 recordIds: groupRecords.map(r => r.recordId),
                 status: status,
                 borrowedAt: first.borrowedAt,
+                daysBorrowed: first.daysBorrowed,
                 userName: first.userName,
                 userEmail: first.userEmail,
                 returnedAt: first.returnedAt,
@@ -513,7 +584,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
             const term = searchTerm.toLowerCase();
             result = result.filter(g => {
                 const box = boxes.find(b => b.boxId === g.boxId);
-                const itemNames = g.records.map(gr => items.find(i => i.itemId === gr.itemId)?.itemName || '').join(' ').toLowerCase();
+                const itemNames = g.records.map(gr => items.find(i => i.itemName === gr.itemId)?.itemName || '').join(' ').toLowerCase();
                 
                 return (
                     g.userName.toLowerCase().includes(term) ||
@@ -588,11 +659,19 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
             }
         });
         
-        DB.adminDeleteRecords(allRecordIdsToDelete);
+        if (onDeleteRecords) {
+            onDeleteRecords(allRecordIdsToDelete);
+        } else {
+            // Fallback (or legacy behavior) if prop not provided
+            DB.adminDeleteRecords(allRecordIdsToDelete);
+        }
         
         setSelectedGroupIds(new Set());
         setShowDeleteConfirm(false);
     };
+
+    // Custom Checkbox Style
+    const customCheckboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-gray-100 checked:border-gray-300 relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-primary indeterminate:bg-gray-100 indeterminate:border-gray-300 indeterminate:after:content-[''] indeterminate:after:absolute indeterminate:after:top-1/2 indeterminate:after:left-1/2 indeterminate:after:-translate-x-1/2 indeterminate:after:-translate-y-1/2 indeterminate:after:w-2.5 indeterminate:after:h-0.5 indeterminate:after:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
     return (
         <div>
@@ -654,7 +733,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                      type="checkbox" 
                                      ref={headerCheckboxRef}
                                      onChange={toggleSelectAll}
-                                     className="rounded text-primary focus:ring-primary h-4 w-4 border-gray-300 cursor-pointer"
+                                     className={customCheckboxClass}
                                  />
                              </th>
                              <th className="py-3 px-4">วันที่ยืม</th>
@@ -679,6 +758,9 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                  const selectValue = group.status === 'pendingReturn' ? 'borrowing' : group.status;
                                  const isPending = group.status === 'pendingReturn';
                                  const isSelected = selectedGroupIds.has(group.groupId);
+                                 
+                                 // Calculate Due Info
+                                 const dueInfo = getDueStatus(group.borrowedAt, group.daysBorrowed, group.status);
 
                                  return (
                                     <tr 
@@ -690,7 +772,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                                 type="checkbox"
                                                 checked={isSelected}
                                                 onChange={() => toggleSelectGroup(group.groupId)}
-                                                className="rounded text-primary focus:ring-primary h-4 w-4 border-gray-300 cursor-pointer"
+                                                className={customCheckboxClass}
                                             />
                                         </td>
                                         <td className="py-3 px-4 text-gray-800">{new Date(group.borrowedAt).toLocaleDateString('th-TH')}</td>
@@ -700,7 +782,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                         </td>
                                         <td className="py-3 px-4">
                                             <div className="font-medium text-gray-900">{box?.boxName || 'Unknown Box'}</div>
-                                            <div className="text-xs text-gray-500">ของทั้งหมด {group.records.length} ชิ้น</div>
+                                            <div className="text-xs text-gray-500">ของทั้งหมด {group.records.length} รายการ</div>
                                         </td>
                                         <td className="py-3 px-4">
                                             {isPending ? (
@@ -708,32 +790,39 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                                     รออนุมัติ
                                                 </span>
                                             ) : (
-                                                <div className="relative inline-block">
-                                                    <select 
-                                                        className={`appearance-none text-xs rounded-full pl-3 pr-8 py-1 font-bold focus:outline-none focus:ring-2 cursor-pointer ${
-                                                            group.status === 'returned'
-                                                            ? 'bg-green-100 text-green-800 border border-green-200 focus:ring-green-500' 
-                                                            : 'bg-amber-100 text-amber-800 border border-amber-200 focus:ring-amber-500'
-                                                        }`}
-                                                        value={selectValue}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value as 'borrowing' | 'returned';
-                                                            const confirmMsg = val === 'returned' 
-                                                                ? 'ยืนยันเปลี่ยนสถานะเป็น "คืนแล้ว" ใช่หรือไม่?'
-                                                                : 'ยืนยันเปลี่ยนสถานะเป็น "กำลังยืมอยู่" ใช่หรือไม่?';
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="relative inline-block w-fit">
+                                                        <select 
+                                                            className={`appearance-none text-xs rounded-full pl-3 pr-8 py-1 font-bold focus:outline-none focus:ring-2 cursor-pointer ${
+                                                                group.status === 'returned'
+                                                                ? 'bg-green-100 text-green-800 border border-green-200 focus:ring-green-500' 
+                                                                : 'bg-amber-100 text-amber-800 border border-amber-200 focus:ring-amber-500'
+                                                            }`}
+                                                            value={selectValue}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value as 'borrowing' | 'returned';
+                                                                const confirmMsg = val === 'returned' 
+                                                                    ? 'ยืนยันเปลี่ยนสถานะเป็น "คืนแล้ว" ใช่หรือไม่?'
+                                                                    : 'ยืนยันเปลี่ยนสถานะเป็น "กำลังยืมอยู่" ใช่หรือไม่?';
 
-                                                            if (confirm(confirmMsg)) {
-                                                                handleStatusChange(group.recordIds, val);
-                                                            }
-                                                        }}
-                                                        disabled={isUpdating}
-                                                    >
-                                                        <option value="borrowing">กำลังยืมอยู่</option>
-                                                        <option value="returned">คืนแล้ว</option>
-                                                    </select>
-                                                    <div className={`pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 ${group.status === 'returned' ? 'text-green-800' : 'text-amber-800'}`}>
-                                                        <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                                if (confirm(confirmMsg)) {
+                                                                    handleStatusChange(group.recordIds, val);
+                                                                }
+                                                            }}
+                                                            disabled={isUpdating}
+                                                        >
+                                                            <option value="borrowing">กำลังยืมอยู่</option>
+                                                            <option value="returned">คืนแล้ว</option>
+                                                        </select>
+                                                        <div className={`pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 ${group.status === 'returned' ? 'text-green-800' : 'text-amber-800'}`}>
+                                                            <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                        </div>
                                                     </div>
+                                                    {dueInfo && (
+                                                        <div className={`text-xs ${dueInfo.className}`}>
+                                                            {dueInfo.label}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>

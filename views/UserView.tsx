@@ -101,6 +101,9 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
   const [returnProofFile, setReturnProofFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Checkbox Style matching Admin (Orange Theme)
+  const orangeCheckboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-[#FED7AA] checked:border-[#FB923C] relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-[#FB923C] focus:outline-none focus:ring-2 focus:ring-[#FB923C] focus:ring-offset-1";
+
   // Group by Box
   const groupedByBox: { [key: string]: Record[] } = {};
   records.forEach(r => {
@@ -115,10 +118,17 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
     setReturnProofFile(null);
   };
 
-  const toggleSelect = (recordId: string) => {
+  const toggleGroupSelect = (groupRecordIds: string[]) => {
     const next = new Set(selectedRecordIds);
-    if (next.has(recordId)) next.delete(recordId);
-    else next.add(recordId);
+    const isAllSelected = groupRecordIds.every(id => next.has(id));
+
+    if (isAllSelected) {
+        // Deselect all
+        groupRecordIds.forEach(id => next.delete(id));
+    } else {
+        // Select all
+        groupRecordIds.forEach(id => next.add(id));
+    }
     setSelectedRecordIds(next);
   };
 
@@ -139,13 +149,34 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
           ? URL.createObjectURL(returnProofFile) 
           : "https://picsum.photos/400/600"; 
           
-      selectedRecordIds.forEach(id => {
-          DB.requestReturn(id, proofUrl);
-      });
+      // DB.requestReturn(id, proofUrl) -> DB.requestReturnBatch
+      DB.requestReturnBatch(Array.from(selectedRecordIds), proofUrl);
       setReturnModalOpen(false);
   };
 
   const isReturnValid = selectedRecordIds.size > 0 && !!returnProofFile;
+
+  // Prepare Grouped Items for Return Modal
+  // Helper to group items by name
+  const getGroupedReturnItems = (boxRecords: Record[]) => {
+      return boxRecords.reduce((acc, r) => {
+          const item = items.find(i => i.itemId === r.itemId);
+          if (!item) return acc;
+          const existing = acc.find(g => g.name === item.itemName);
+          if (existing) {
+              existing.count++;
+              existing.recordIds.push(r.recordId);
+          } else {
+              acc.push({
+                  name: item.itemName,
+                  imageUrl: item.itemImageUrl,
+                  count: 1,
+                  recordIds: [r.recordId]
+              });
+          }
+          return acc;
+      }, [] as { name: string; imageUrl: string; count: number; recordIds: string[] }[]);
+  };
 
   if (records.length === 0) return <EmptyState message="ไม่มีรายการที่กำลังยืม" />;
 
@@ -161,6 +192,19 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
         const firstRecord = boxRecords[0];
         const { text: dueText, isOverdue, isNearDue } = getDueInfo(firstRecord.borrowedAt, firstRecord.daysBorrowed, now);
 
+        // Grouping logic for display on card
+        const groupedItemsForCard = boxRecords.reduce((acc, r) => {
+            const item = items.find(i => i.itemId === r.itemId);
+            if (!item) return acc;
+            const existing = acc.find(g => g.name === item.itemName);
+            if (existing) {
+                existing.count++;
+            } else {
+                acc.push({ name: item.itemName, count: 1 });
+            }
+            return acc;
+        }, [] as { name: string; count: number }[]);
+
         return (
           <div key={boxId} className={`bg-white p-6 rounded-xl shadow-sm border flex flex-col transition-colors ${isOverdue ? 'border-red-200 bg-red-50/10' : 'border-gray-200 hover:border-pink-200'}`}>
             <div className="flex items-start justify-between mb-2">
@@ -169,7 +213,7 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
                 <p className="text-sm text-gray-600">{box?.boxType}</p>
               </div>
               <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
-                {boxRecords.length} ชิ้น
+                {boxRecords.length} รายการ
               </div>
             </div>
 
@@ -204,15 +248,13 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
             )}
             
             <ul className="space-y-2 mb-6 flex-grow">
-              {boxRecords.map(r => {
-                const item = items.find(i => i.itemId === r.itemId);
-                return (
-                  <li key={r.recordId} className="flex items-center text-sm text-gray-700">
-                    <div className="w-2 h-2 rounded-full bg-primary mr-2"></div>
-                    {item?.itemName}
-                  </li>
-                );
-              })}
+              {groupedItemsForCard.map((g, idx) => (
+                <li key={idx} className="flex items-center text-sm text-gray-700">
+                  <div className="w-2 h-2 rounded-full bg-primary mr-2"></div>
+                  {g.name} 
+                  {g.count > 1 && <span className="ml-1 text-gray-500 text-xs">(x{g.count} รายการ)</span>}
+                </li>
+              ))}
             </ul>
 
             <Button onClick={() => handleReturnClick(boxId)} variant="primary" className="w-full">
@@ -248,21 +290,26 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
             <div>
                 <p className="text-sm font-bold text-gray-900 mb-3">เช็ครายการสิ่งของที่ต้องการคืน:</p>
                 <div className="space-y-2 border border-gray-200 rounded-lg p-3 max-h-60 overflow-y-auto bg-gray-50/50">
-                {groupedByBox[selectedBoxId].map(r => {
-                    const item = items.find(i => i.itemId === r.itemId);
+                {/* Logic to render grouped items */}
+                {getGroupedReturnItems(groupedByBox[selectedBoxId]).map(group => {
+                    const isAllSelected = group.recordIds.every(id => selectedRecordIds.has(id));
+                    
                     return (
-                    <label key={r.recordId} className="flex items-center space-x-3 p-2 hover:bg-white hover:shadow-sm rounded transition-all cursor-pointer">
-                        <input 
-                        type="checkbox" 
-                        className="rounded text-primary focus:ring-primary h-5 w-5 border-gray-300"
-                        checked={selectedRecordIds.has(r.recordId)}
-                        onChange={() => toggleSelect(r.recordId)}
-                        />
-                        <div className="flex items-center space-x-3">
-                            <img src={item?.itemImageUrl} className="w-10 h-10 object-cover rounded" alt="" />
-                            <span className="text-gray-900 text-sm font-medium">{item?.itemName}</span>
-                        </div>
-                    </label>
+                        <label key={group.name} className="flex items-center space-x-3 p-2 hover:bg-white hover:shadow-sm rounded transition-all cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                className={orangeCheckboxClass}
+                                checked={isAllSelected}
+                                onChange={() => toggleGroupSelect(group.recordIds)}
+                            />
+                            <div className="flex items-center space-x-3 flex-1">
+                                <img src={group.imageUrl} className="w-10 h-10 object-cover rounded" alt="" />
+                                <div>
+                                    <p className="text-gray-900 text-sm font-medium">{group.name}</p>
+                                    <p className="text-gray-500 text-xs">จำนวน {group.count} รายการ</p>
+                                </div>
+                            </div>
+                        </label>
                     );
                 })}
                 </div>
@@ -326,25 +373,66 @@ interface StatusListProps {
 const StatusList: React.FC<StatusListProps> = ({ records, items, type }) => {
   if (records.length === 0) return <EmptyState message={type === 'pendingReturn' ? "ไม่มีรายการรออนุมัติ" : "ไม่มีประวัติการคืน"} />;
 
+  // GROUPING LOGIC
+  // Combine records that have the same Item Name and the same Status/Date
+  
+  type GroupedItem = { 
+    recordId: string, 
+    name: string, 
+    imageUrl: string, 
+    status: RecordStatus, 
+    dateLabel: string, 
+    count: number 
+  };
+
+  const groupedItems = records.reduce((acc, r) => {
+    const item = items.find(i => i.itemId === r.itemId);
+    if (!item) return acc;
+
+    // Determine Date to group by (so history from different days doesn't merge)
+    const dateRaw = type === 'pendingReturn' ? r.returnRequestDate : r.returnedAt;
+    const dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString('th-TH') : '-';
+    
+    // Key: Name + Date (to keep different batches separate)
+    const key = `${item.itemName}_${dateStr}`;
+
+    if (!acc[key]) {
+        acc[key] = {
+            recordId: r.recordId, // Use first record ID for key
+            name: item.itemName,
+            imageUrl: item.itemImageUrl,
+            status: r.status,
+            dateLabel: dateStr,
+            count: 0
+        };
+    }
+    acc[key].count++;
+    return acc;
+  }, {} as { [key: string]: GroupedItem });
+
   return (
     <div className="space-y-4">
-      {records.map(r => {
-        const item = items.find(i => i.itemId === r.itemId);
-        const statusLabel = getUserStatusLabel(r.status);
+      {Object.values(groupedItems).map((group: GroupedItem) => {
+        const statusLabel = getUserStatusLabel(group.status);
         
         return (
           <div 
-            key={r.recordId} 
+            key={group.recordId} 
             className={`bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between`}
           >
             <div className="flex items-center gap-4">
-                <img src={item?.itemImageUrl} className="w-16 h-16 rounded-lg object-cover bg-gray-200" alt="" />
+                <div className="relative">
+                    <img src={group.imageUrl} className="w-16 h-16 rounded-lg object-cover bg-gray-200" alt="" />
+                </div>
                 <div>
-                    <h4 className="font-bold text-gray-900">{item?.itemName}</h4>
+                    <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                        {group.name}
+                        {group.count > 1 && <span className="text-xs font-normal text-gray-500">(จำนวน {group.count} รายการ)</span>}
+                    </h4>
                     <p className="text-xs text-gray-600 mt-1">
                         {type === 'pendingReturn'
-                            ? `ขอคืนเมื่อ: ${new Date(r.returnRequestDate!).toLocaleDateString('th-TH')}` 
-                            : `คืนสำเร็จเมื่อ: ${new Date(r.returnedAt!).toLocaleDateString('th-TH')}`
+                            ? `ขอคืนเมื่อ: ${group.dateLabel}` 
+                            : `คืนสำเร็จเมื่อ: ${group.dateLabel}`
                         }
                     </p>
                 </div>

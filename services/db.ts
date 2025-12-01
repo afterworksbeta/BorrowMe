@@ -1,4 +1,5 @@
-import { User, Box, Item, Record, PopulatedBox, RecordStatus, ItemStatus } from '../types';
+
+import { User, Box, Item, Record, PopulatedBox, RecordStatus, ItemStatus, AdminNotification, AdminNotificationType } from '../types';
 
 /**
  * SYSTEM CONFIGURATION
@@ -10,7 +11,7 @@ const MOCK_USERS: User[] = [
     userId: 'admin-init', 
     name: 'Admin', 
     phone: '0000000000', 
-    email: 'admin@example.com', 
+    email: 'admin@borrowme.com', 
     role: 'admin', 
     password: 'admin1234', 
     createdAt: new Date().toISOString(),
@@ -45,12 +46,18 @@ const MOCK_ITEMS: Item[] = [
   { itemId: 'i2', boxId: 'b1', itemName: 'กรรไกร', itemStatus: 'available', itemImageUrl: 'https://picsum.photos/200/200?random=11', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { itemId: 'i3', boxId: 'b2', itemName: 'สาย HDMI', itemStatus: 'available', itemImageUrl: 'https://picsum.photos/200/200?random=12', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { itemId: 'i4', boxId: 'b2', itemName: 'Mouse Wireless', itemStatus: 'borrowing', itemImageUrl: 'https://picsum.photos/200/200?random=13', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { itemId: 'i5', boxId: 'b3', itemName: 'ลูกบาสเกตบอล', itemStatus: 'available', itemImageUrl: 'https://picsum.photos/200/200?random=14', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { itemId: 'i5', boxId: 'b3', itemName: 'ลูกบาสเกตบอล', itemStatus: 'borrowing', itemImageUrl: 'https://picsum.photos/200/200?random=14', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 ];
 
+// Helper to generate dates relative to NOW
+const NOW = Date.now();
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const MOCK_RECORDS: Record[] = [
+    // ตัวอย่างที่ 1: เกินกำหนด (Overdue)
+    // ยืมมา 9 วันที่แล้ว (กำหนด 7 วัน) -> เกินมา 2 วัน
     {
-        recordId: 'r1',
+        recordId: 'r_overdue_1',
         userId: 'u2',
         userName: 'General User',
         userEmail: 'user@borrowme.com',
@@ -59,14 +66,35 @@ const MOCK_RECORDS: Record[] = [
         itemId: 'i4',
         status: 'borrowing',
         daysBorrowed: 7,
-        borrowedAt: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 days ago
+        borrowedAt: new Date(NOW - (9 * DAY_MS)).toISOString(), 
         returnRequestDate: null,
         returnedAt: null,
         proofImageUrl: null,
         adminNote: null,
-        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-        updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-        dueSoonNotifiedAt: null
+        createdAt: new Date(NOW - (9 * DAY_MS)).toISOString(),
+        updatedAt: new Date(NOW - (9 * DAY_MS)).toISOString(),
+        dueSoonNotifiedAt: new Date(NOW - (2 * DAY_MS)).toISOString() // เคยแจ้งเตือนไปแล้ว
+    },
+    // ตัวอย่างที่ 2: ใกล้ครบกำหนด (Due Soon)
+    // ยืมมา 6 วันที่แล้ว (กำหนด 7 วัน) -> เหลืออีก 1 วัน (ครบกำหนดพรุ่งนี้)
+    {
+        recordId: 'r_duesoon_1',
+        userId: 'u2',
+        userName: 'General User',
+        userEmail: 'user@borrowme.com',
+        userPhone: '0898765432',
+        boxId: 'b3',
+        itemId: 'i5',
+        status: 'borrowing',
+        daysBorrowed: 7,
+        borrowedAt: new Date(NOW - (6 * DAY_MS)).toISOString(),
+        returnRequestDate: null,
+        returnedAt: null,
+        proofImageUrl: null,
+        adminNote: null,
+        createdAt: new Date(NOW - (6 * DAY_MS)).toISOString(),
+        updatedAt: new Date(NOW - (6 * DAY_MS)).toISOString(),
+        dueSoonNotifiedAt: null // ยังไม่เคยแจ้งเตือน (ระบบจะยิงเมลเมื่อเปิดแอป)
     }
 ];
 
@@ -77,6 +105,7 @@ const STORAGE_KEYS = {
   ITEMS: 'boxbox_items',
   RECORDS: 'boxbox_records',
   SESSION: 'boxbox_session',
+  ADMIN_NOTIFS: 'boxbox_admin_notifications'
 };
 
 // Event Bus for Realtime Simulation
@@ -146,6 +175,53 @@ const ensureDefaultAdmin = () => {
 };
 
 ensureDefaultAdmin();
+
+// --- ADMIN NOTIFICATIONS SYSTEM ---
+
+export const getAdminNotifications = (): AdminNotification[] => {
+    return loadData<AdminNotification[]>(STORAGE_KEYS.ADMIN_NOTIFS, []);
+};
+
+/**
+ * Helper: Add Admin Notification with Deduplication
+ * ป้องกันการแจ้งเตือนซ้ำ โดยเช็กว่ามี (type + borrowId + adminId) อยู่แล้วหรือไม่
+ */
+export const addAdminNotification = (next: AdminNotification) => {
+    const notifications = loadData<AdminNotification[]>(STORAGE_KEYS.ADMIN_NOTIFS, []);
+    
+    // 2. สร้าง helper กลางที่ “กันซ้ำ” ก่อนเพิ่มแจ้งเตือน
+    const isDup = notifications.some(
+        n =>
+        n.type === next.type &&
+        n.borrowId === next.borrowId &&
+        n.adminId === next.adminId
+    );
+
+    if (isDup) {
+        console.log(`[AdminNotif] Skipped duplicate: ${next.type} for borrowId ${next.borrowId}`);
+        return; 
+    }
+
+    // Add to top
+    notifications.unshift(next);
+    saveData(STORAGE_KEYS.ADMIN_NOTIFS, notifications);
+};
+
+export const markAdminNotificationRead = (notificationId: string) => {
+    const notifications = loadData<AdminNotification[]>(STORAGE_KEYS.ADMIN_NOTIFS, []);
+    const updated = notifications.map(n => n.id === notificationId ? { ...n, isRead: true } : n);
+    saveData(STORAGE_KEYS.ADMIN_NOTIFS, updated);
+};
+
+export const markAllAdminNotificationsRead = () => {
+    const notifications = loadData<AdminNotification[]>(STORAGE_KEYS.ADMIN_NOTIFS, []);
+    const updated = notifications.map(n => ({ ...n, isRead: true }));
+    saveData(STORAGE_KEYS.ADMIN_NOTIFS, updated);
+};
+
+export const clearAllAdminNotifications = () => {
+    saveData(STORAGE_KEYS.ADMIN_NOTIFS, []);
+};
 
 // --- API ---
 
@@ -254,6 +330,61 @@ export const deleteAccount = (userId: string): void => {
     saveData(STORAGE_KEYS.USERS, users);
     localStorage.removeItem(STORAGE_KEYS.SESSION);
 };
+
+// --- USER MANAGEMENT (ADMIN) ---
+
+export const getAllUsers = (): User[] => {
+    return loadData<User[]>(STORAGE_KEYS.USERS, MOCK_USERS);
+};
+
+export const adminDeleteUser = (requesterUserId: string, targetUserId: string): { success: boolean, message?: string } => {
+    let users = loadData<User[]>(STORAGE_KEYS.USERS, MOCK_USERS);
+    
+    const requester = users.find(u => u.userId === requesterUserId);
+    const target = users.find(u => u.userId === targetUserId);
+
+    if (!requester || requester.role !== 'admin') {
+        return { success: false, message: 'ไม่มีสิทธิ์ในการลบผู้ใช้' };
+    }
+
+    if (!target) {
+        return { success: false, message: 'ไม่พบผู้ใช้งานที่ต้องการลบ' };
+    }
+
+    // PROTECT MAIN ADMIN
+    const MAIN_ADMIN_EMAIL = 'admin@example.com';
+    if (target.email === MAIN_ADMIN_EMAIL && requester.email !== MAIN_ADMIN_EMAIL) {
+        return { success: false, message: 'ไม่สามารถลบผู้ดูแลระบบหลักได้' };
+    }
+
+    const initialLength = users.length;
+    
+    // Prevent deleting the currently logged in session via this method (should use deleteAccount)
+    // But for admin management of OTHERS:
+    users = users.filter(u => u.userId !== targetUserId);
+    
+    if (users.length < initialLength) {
+        saveData(STORAGE_KEYS.USERS, users);
+        // If we deleted the current session user (unlikely but possible if self-delete via list), clear session
+        const session = getCurrentUser();
+        if (session && session.userId === targetUserId) {
+             localStorage.removeItem(STORAGE_KEYS.SESSION);
+        }
+        return { success: true };
+    }
+    return { success: false, message: 'เกิดข้อผิดพลาดในการลบ' };
+};
+
+export const adminSendUserMessage = (userId: string, subject: string, message: string): boolean => {
+     const users = loadData<User[]>(STORAGE_KEYS.USERS, MOCK_USERS);
+     const user = users.find(u => u.userId === userId);
+     if (!user) return false;
+     
+     // Mock sending email
+     sendEmail(user.email, subject, message);
+     return true;
+};
+
 
 // --- ADMIN MANAGEMENT ---
 
@@ -405,12 +536,17 @@ export const borrowBox = (userId: string, boxId: string, days: number, proofUrl:
   const users = loadData<User[]>(STORAGE_KEYS.USERS, MOCK_USERS);
   const user = users.find(u => u.userId === userId);
   if (!user) return 0;
+  
+  const boxes = loadData<Box[]>(STORAGE_KEYS.BOXES, MOCK_BOXES);
+  const box = boxes.find(b => b.boxId === boxId);
 
   const items = loadData<Item[]>(STORAGE_KEYS.ITEMS, MOCK_ITEMS);
   const records = loadData<Record[]>(STORAGE_KEYS.RECORDS, MOCK_RECORDS);
 
   const availableItems = items.filter(i => i.boxId === boxId && i.itemStatus === 'available');
   if (availableItems.length === 0) return 0;
+
+  const newRecords: Record[] = [];
 
   availableItems.forEach(item => {
     // NEW: Set Item Status to 'borrowing'
@@ -438,14 +574,30 @@ export const borrowBox = (userId: string, boxId: string, days: number, proofUrl:
       dueSoonNotifiedAt: null // Initialize as null
     };
     records.push(newRecord);
+    newRecords.push(newRecord);
   });
 
   saveData(STORAGE_KEYS.ITEMS, items);
   saveData(STORAGE_KEYS.RECORDS, records);
   
+  // Create only ONE notification for the entire box
+  if (newRecords.length > 0) {
+      const firstRecord = newRecords[0];
+      // 3.A: เมื่อยืมของสำเร็จ (BORROW_CREATED)
+      // Notification will be deduplicated by id + type
+      addAdminNotification({
+        id: `borrow-${firstRecord.recordId}`,
+        adminId: null, // Notify all admins
+        borrowId: firstRecord.recordId,
+        type: "BORROW_CREATED",
+        title: box?.boxName || 'Unknown Box',
+        message: `${user.name} ยืมกล่องใหม่สำเร็จ`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      });
+  }
+  
   if (user.notifyOnBorrow !== false) { 
-      const boxes = loadData<Box[]>(STORAGE_KEYS.BOXES, MOCK_BOXES);
-      const box = boxes.find(b => b.boxId === boxId);
       const subject = `[ระบบยืม-คืนของ] ยืมของสำเร็จ: ${box?.boxName || 'ไม่ระบุชื่อกล่อง'}`;
       const body = `เรียน ${user.name},\n\nคุณได้ทำการยืมกล่อง "${box?.boxName}"\nจำนวนสิ่งของ: ${availableItems.length} รายการ\nเป็นเวลา: ${days} วัน\nวันที่ยืม: ${new Date().toLocaleString('th-TH')}`;
       sendEmail(user.email, subject, body);
@@ -456,15 +608,22 @@ export const borrowBox = (userId: string, boxId: string, days: number, proofUrl:
 
 export const requestReturn = (recordId: string, proofUrl: string): boolean => {
   const records = loadData<Record[]>(STORAGE_KEYS.RECORDS, MOCK_RECORDS);
+  const boxes = loadData<Box[]>(STORAGE_KEYS.BOXES, MOCK_BOXES);
+  
   const recordIndex = records.findIndex(r => r.recordId === recordId);
   if (recordIndex === -1) return false;
 
   const record = records[recordIndex];
+  const box = boxes.find(b => b.boxId === record.boxId);
+  
+  // 3.C: เช็กสถานะรอบก่อน (Was it previously rejected?)
+  const wasRejected = !!record.adminNote;
+
   // NEW: Set status to 'pendingReturn'
   record.status = 'pendingReturn';
   record.returnRequestDate = new Date().toISOString();
   record.proofImageUrl = proofUrl;
-  record.adminNote = null; 
+  record.adminNote = null; // Clear rejection note on new attempt
   record.updatedAt = new Date().toISOString();
   saveData(STORAGE_KEYS.RECORDS, records);
 
@@ -476,6 +635,80 @@ export const requestReturn = (recordId: string, proofUrl: string): boolean => {
     items[itemIndex].updatedAt = new Date().toISOString();
     saveData(STORAGE_KEYS.ITEMS, items);
   }
+
+  // 3.B & 3.C: สร้าง notification
+  if (wasRejected) {
+      addAdminNotification({
+          id: `return-rejected-new-${record.recordId}-${Date.now()}`,
+          adminId: null,
+          borrowId: record.recordId,
+          type: "RETURN_REJECTED_NEW_REQUEST",
+          title: box?.boxName || 'Return Request',
+          message: `${record.userName} ส่งคำขอคืนใหม่ หลังจากถูกปฏิเสธ`,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+      });
+  } else {
+      addAdminNotification({
+          id: `return-request-${record.recordId}-${Date.now()}`,
+          adminId: null,
+          borrowId: record.recordId,
+          type: "RETURN_REQUESTED",
+          title: box?.boxName || 'Return Request',
+          message: `${record.userName} ส่งคำขอคืนของ`,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+      });
+  }
+
+  return true;
+};
+
+// Batch request for multiple items in the same box
+export const requestReturnBatch = (recordIds: string[], proofUrl: string): boolean => {
+  const records = loadData<Record[]>(STORAGE_KEYS.RECORDS, MOCK_RECORDS);
+  const boxes = loadData<Box[]>(STORAGE_KEYS.BOXES, MOCK_BOXES);
+  const items = loadData<Item[]>(STORAGE_KEYS.ITEMS, MOCK_ITEMS);
+  
+  const targetRecords = records.filter(r => recordIds.includes(r.recordId));
+  if (targetRecords.length === 0) return false;
+
+  const firstRecord = targetRecords[0];
+  const box = boxes.find(b => b.boxId === firstRecord.boxId);
+  const wasRejected = targetRecords.some(r => !!r.adminNote);
+  
+  targetRecords.forEach(record => {
+      record.status = 'pendingReturn';
+      record.returnRequestDate = new Date().toISOString();
+      record.proofImageUrl = proofUrl;
+      record.adminNote = null; 
+      record.updatedAt = new Date().toISOString();
+
+      const item = items.find(i => i.itemId === record.itemId);
+      if (item) {
+        item.itemStatus = 'pendingReturn';
+        item.updatedAt = new Date().toISOString();
+      }
+  });
+
+  saveData(STORAGE_KEYS.RECORDS, records);
+  saveData(STORAGE_KEYS.ITEMS, items);
+
+  const notifType = wasRejected ? "RETURN_REJECTED_NEW_REQUEST" : "RETURN_REQUESTED";
+  const msg = wasRejected 
+    ? `${firstRecord.userName} ส่งคำขอคืนใหม่ หลังจากถูกปฏิเสธ`
+    : `${firstRecord.userName} ส่งคำขอคืนของ`;
+
+  addAdminNotification({
+      id: `return-batch-${firstRecord.recordId}-${Date.now()}`,
+      adminId: null,
+      borrowId: firstRecord.recordId,
+      type: notifType as any,
+      title: box?.boxName || 'Return Request',
+      message: msg,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+  });
 
   return true;
 };
@@ -620,18 +853,22 @@ export const checkAndNotifyDueSoon = () => {
     records.forEach(record => {
         // Only check active loans that haven't been notified yet
         if (record.status === 'returned') return;
-        if (record.dueSoonNotifiedAt) return; // Already notified
         
         const borrowedAt = new Date(record.borrowedAt).getTime();
         const dueDate = borrowedAt + (record.daysBorrowed * msInDay);
         const diffMs = dueDate - now;
         
-        // Check if due within the next 24 hours (and not already overdue by too much, though 0 lower bound handles that)
-        if (diffMs > 0 && diffMs <= msInDay) {
+        // Calculate Days Left for Logic
+        // Ceil to get accurate "next day" feel (0-24h = 1 day left)
+        const daysLeft = Math.ceil(diffMs / msInDay);
+
+        // TRIGGER: 1 Day remaining (and not negative)
+        if (daysLeft === 1 && diffMs > 0) {
             const user = users.find(u => u.userId === record.userId);
             const box = boxes.find(b => b.boxId === record.boxId);
             
-            if (user) {
+            // A) User Email Notification (Check flag to prevent duplicate emails)
+            if (user && !record.dueSoonNotifiedAt) {
                 // Send Notification
                 const subject = `[ระบบยืม-คืนของ] แจ้งเตือน: ใกล้ครบกำหนดคืนกล่อง "${box?.boxName || 'สินค้า'}"`;
                 const dueDateStr = new Date(dueDate).toLocaleDateString('th-TH');
@@ -639,10 +876,23 @@ export const checkAndNotifyDueSoon = () => {
                 
                 sendEmail(user.email, subject, body);
                 
-                // Mark as notified
+                // Mark as notified for email
                 record.dueSoonNotifiedAt = new Date().toISOString();
                 updatedCount++;
             }
+
+            // 3.D: เมื่อของใกล้หมดเขตคืน (BORROW_DUE_SOON)
+            // Dedup handled inside addAdminNotification based on type+borrowId
+            addAdminNotification({
+                id: `due-soon-${record.recordId}`,
+                adminId: null,
+                borrowId: record.recordId,
+                type: "BORROW_DUE_SOON",
+                title: box?.boxName || 'Due Soon',
+                message: `กล่องนี้จะครบกำหนดคืนในอีก 1 วัน`,
+                isRead: false,
+                createdAt: new Date().toISOString(),
+            });
         }
     });
     
@@ -650,6 +900,25 @@ export const checkAndNotifyDueSoon = () => {
         console.log(`Sent notifications for ${updatedCount} records.`);
         saveData(STORAGE_KEYS.RECORDS, records);
     } else {
-        console.log("No new notifications to send.");
+        console.log("No new email notifications to send.");
     }
+};
+
+/**
+ * Checks if a record needs a due notification (Due within 3 days or Overdue)
+ * Returns true if status != returned AND (dueDate - now) <= 3 days
+ */
+export const shouldShowDueNotification = (borrowedAt: string, daysBorrowed: number, status: string): boolean => {
+    if (status === 'returned') return false;
+
+    const borrowed = new Date(borrowedAt).getTime();
+    const durationMs = daysBorrowed * 24 * 60 * 60 * 1000;
+    const dueDate = borrowed + durationMs;
+    const now = Date.now();
+    
+    const diffMs = dueDate - now;
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Show notification if 3 days or less remaining (including overdue which is negative)
+    return diffDays <= 3;
 };

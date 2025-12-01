@@ -67,6 +67,25 @@ export interface Record {
   dueSoonNotifiedAt?: string | null; // Tracks when the 24h warning was sent
 }
 
+// --- ADMIN NOTIFICATIONS ---
+
+export type AdminNotificationType =
+  | "BORROW_CREATED"
+  | "RETURN_REQUESTED"
+  | "RETURN_REJECTED_NEW_REQUEST"
+  | "BORROW_DUE_SOON";
+
+export interface AdminNotification {
+  id: string;
+  adminId: string | null;  // null = Notify all admins
+  borrowId: string;        // Maps to Record.recordId (renamed from recordId for consistency with prompt, or we can alias)
+  type: AdminNotificationType;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 // Helper types for UI
 export interface PopulatedBox extends Box {
   itemCount: number;

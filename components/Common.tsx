@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { LucideIcon, Eye, EyeOff } from 'lucide-react';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { LucideIcon, Eye, EyeOff, Bell, CalendarClock, AlertCircle, CheckCircle, XCircle, FileText, Info, Trash2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'outline';
@@ -57,7 +58,7 @@ export const Badge: React.FC<{ status: string }> = ({ status }) => {
   };
 
   const labels: Record<string, string> = {
-    available: "ว่าง",
+    available: "พร้อม",
     
     // NEW STATUS LABELS
     borrowing: "กำลังยืมอยู่",
@@ -76,6 +77,380 @@ export const Badge: React.FC<{ status: string }> = ({ status }) => {
     </span>
   );
 };
+
+// --- Notification System ---
+
+export type NotificationType = 
+    | "OVERDUE" 
+    | "DUE_SOON" 
+    | "RETURN_REJECTED"
+    // ADMIN TYPES
+    | "BORROW_CREATED"
+    | "RETURN_REQUESTED"
+    | "RETURN_REJECTED_NEW_REQUEST"
+    | "BORROW_DUE_SOON";
+
+export interface NotificationItem {
+  id: string;
+  recordId?: string; // New: Link to BorrowRecord
+  title: string;
+  message: string;
+  type: NotificationType;
+  isRead: boolean;
+}
+
+export const useNotifications = () => {
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
+    // Initial data handled by App.tsx syncing logic usually, defaulting empty here to avoid duplicates
+  ]);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const markAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const addNotification = (item: NotificationItem) => {
+    setNotifications(prev => {
+        // Prevent duplicates for the same ID
+        if (prev.some(n => n.id === item.id)) return prev;
+        return [item, ...prev];
+    });
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+  
+  // New: Remove by recordId to sync with table deletion
+  const removeNotificationsByRecordId = (recordId: string) => {
+    setNotifications(prev => prev.filter(n => n.recordId !== recordId));
+  };
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+  
+  // To allow external sync (e.g. from DB for admins)
+  const setAllNotifications = (items: NotificationItem[]) => {
+      setNotifications(items);
+  };
+
+  return { 
+    notifications, 
+    unreadCount, 
+    markAsRead, 
+    markAllAsRead, 
+    addNotification,
+    removeNotification,
+    removeNotificationsByRecordId,
+    setAllNotifications,
+    clearAllNotifications
+  };
+};
+
+interface SwipeableNotificationRowProps {
+  item: NotificationItem;
+  onOpen: (id: string | null) => void;
+  onDelete: (id: string) => void;
+  onClick: (id: string) => void;
+  isOpen: boolean;
+}
+
+const SwipeableNotificationRow: React.FC<SwipeableNotificationRowProps> = ({ item, onOpen, onDelete, onClick, isOpen }) => {
+  const DELETE_WIDTH = 88; // Width of the delete button
+  const [offsetX, setOffsetX] = useState(0);
+  const isDragging = useRef(false);
+  const startX = useRef<number | null>(null);
+  const didMove = useRef(false); // To distinguish click vs swipe
+
+  // Sync with parent's open state (Source of Truth for initial/reset position)
+  useEffect(() => {
+    setOffsetX(isOpen ? -DELETE_WIDTH : 0);
+  }, [isOpen]);
+
+  const handleStart = (clientX: number) => {
+    isDragging.current = true;
+    startX.current = clientX;
+    didMove.current = false;
+  };
+
+  const handleMove = (clientX: number) => {
+    if (!isDragging.current || startX.current === null) return;
+    const delta = clientX - startX.current;
+    
+    // Ignore micro-movements to allow clean clicks
+    if (Math.abs(delta) > 5) didMove.current = true;
+
+    // Calculate new position based on state (isOpen or not) + delta
+    const baseOffset = isOpen ? -DELETE_WIDTH : 0;
+    let newOffset = baseOffset + delta;
+
+    // Clamp values: max 0 (closed), min -DELETE_WIDTH (open)
+    if (newOffset > 0) newOffset = 0;
+    if (newOffset < -DELETE_WIDTH) newOffset = -DELETE_WIDTH;
+
+    setOffsetX(newOffset);
+  };
+
+  const handleEnd = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    startX.current = null;
+
+    // Lock Logic: If dragged past halfway, snap to open (-DELETE_WIDTH), else snap closed (0)
+    if (offsetX <= -DELETE_WIDTH / 2) {
+        setOffsetX(-DELETE_WIDTH);
+        if (!isOpen) onOpen(item.id);
+    } else {
+        setOffsetX(0);
+        if (isOpen) onOpen(null);
+    }
+  };
+
+  // Mouse Events
+  const onMouseDown = (e: React.MouseEvent) => handleStart(e.clientX);
+  const onMouseMove = (e: React.MouseEvent) => handleMove(e.clientX);
+  const onMouseUp = () => handleEnd();
+  const onMouseLeave = () => {
+    if (isDragging.current) handleEnd();
+  };
+
+  // Touch Events
+  const onTouchStart = (e: React.TouchEvent) => handleStart(e.touches[0].clientX);
+  const onTouchMove = (e: React.TouchEvent) => handleMove(e.touches[0].clientX);
+  const onTouchEnd = () => handleEnd();
+
+  const handleContentClick = (e: React.MouseEvent) => {
+    // If it was a swipe (didMove), don't trigger the click action
+    if (didMove.current) return;
+
+    // If open, clicking just closes it
+    if (isOpen) {
+        onOpen(null);
+        return;
+    }
+
+    onClick(item.id);
+  };
+
+  const baseClasses = "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors border-l-4 h-full relative z-10";
+  
+  // Style Logic based on Type and Read status
+  let rowClass = "bg-white hover:bg-slate-50 text-slate-500 border-l-transparent"; // Default Read
+  let IconComponent = CalendarClock;
+  let iconClass = "bg-gray-100 text-gray-300";
+  let dotColor = "bg-[#FB923C]";
+
+  if (item.type === 'RETURN_REJECTED' || item.type === 'RETURN_REJECTED_NEW_REQUEST') {
+       rowClass = item.isRead 
+        ? "bg-white text-slate-500 border-l-transparent" 
+        : "bg-red-50 hover:bg-red-100 text-slate-900 border-l-red-500";
+       IconComponent = XCircle;
+       iconClass = item.isRead ? "bg-red-50 text-red-200" : "bg-red-100 text-red-600";
+       dotColor = "bg-red-500";
+  } 
+  else if (item.type === 'OVERDUE' || item.type === 'BORROW_DUE_SOON') {
+      rowClass = item.isRead
+       ? "bg-white text-slate-500 border-l-transparent"
+       : "bg-[#FFF7ED] hover:bg-[#FFEDD5] text-slate-900 border-l-[#FB923C]";
+      IconComponent = AlertCircle;
+      iconClass = item.isRead ? "bg-red-50 text-red-300" : "bg-red-100 text-red-600";
+  } 
+  else if (item.type === 'BORROW_CREATED') {
+      rowClass = item.isRead
+       ? "bg-white text-slate-500 border-l-transparent"
+       : "bg-blue-50 hover:bg-blue-100 text-slate-900 border-l-blue-500";
+      IconComponent = Info;
+      iconClass = item.isRead ? "bg-blue-50 text-blue-300" : "bg-blue-100 text-blue-600";
+      dotColor = "bg-blue-500";
+  }
+  else if (item.type === 'RETURN_REQUESTED') {
+      rowClass = item.isRead
+       ? "bg-white text-slate-500 border-l-transparent"
+       : "bg-orange-50 hover:bg-orange-100 text-slate-900 border-l-orange-500";
+      IconComponent = CalendarClock;
+      iconClass = item.isRead ? "bg-orange-50 text-orange-300" : "bg-orange-100 text-orange-600";
+      dotColor = "bg-orange-500";
+  }
+  else if (!item.isRead) {
+      rowClass = "bg-[#FFF7ED] hover:bg-[#FFEDD5] text-slate-900 border-l-[#FB923C]";
+      iconClass = "bg-white border border-gray-200 text-gray-600";
+  }
+
+  // Disable transition while dragging for responsiveness, enable it for snap-back/lock
+  const transitionStyle = isDragging.current ? 'none' : 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+  return (
+    <div className="relative overflow-hidden w-full select-none touch-pan-y">
+      {/* Delete Button (Behind) */}
+      <button
+        type="button"
+        className="absolute inset-y-0 right-0 bg-red-500 text-white text-sm font-medium flex items-center justify-center z-0 active:bg-red-600 transition-colors"
+        style={{ width: `${DELETE_WIDTH}px` }}
+        onClick={(e) => {
+            e.stopPropagation();
+            onDelete(item.id);
+        }}
+      >
+        ลบ
+      </button>
+
+      {/* Swipeable Content (Front) */}
+      <div
+        style={{ transform: `translateX(${offsetX}px)`, transition: transitionStyle }}
+        className={`${baseClasses} ${rowClass}`}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseLeave}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={handleContentClick}
+      >
+        <div className={`mt-0.5 p-1.5 rounded-full flex-shrink-0 ${iconClass}`}>
+           <IconComponent size={16} />
+        </div>
+        <div className="flex-1 select-none pointer-events-none">
+          <p className={`text-sm font-bold ${item.isRead ? 'text-slate-500' : 'text-slate-900'}`}>{item.title}</p>
+          <p className={`text-xs mt-0.5 font-medium ${
+            (item.type === 'RETURN_REJECTED' || item.type === 'RETURN_REJECTED_NEW_REQUEST')
+                ? 'text-red-600'
+                : (item.type === 'OVERDUE' || item.type === 'BORROW_DUE_SOON')
+                    ? (item.isRead ? 'text-red-300' : 'text-red-600') 
+                    : (item.isRead ? 'text-slate-400' : 'text-slate-500')
+          }`}>
+            {item.message}
+          </p>
+        </div>
+        {!item.isRead && (
+            <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${dotColor}`}></div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface NotificationBellProps {
+  notifications: NotificationItem[];
+  unreadCount: number;
+  onItemClick: (item: NotificationItem) => void;
+  onMarkAllRead?: () => void;
+  onRemoveItem: (id: string) => void; 
+  onClearAll?: () => void;
+}
+
+export const NotificationBell: React.FC<NotificationBellProps> = ({ 
+  notifications, 
+  unreadCount, 
+  onItemClick,
+  onMarkAllRead,
+  onRemoveItem,
+  onClearAll
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleClickItem = (item: NotificationItem) => {
+    setIsOpen(false);
+    onItemClick(item);
+  };
+
+  const handleDelete = (id: string) => {
+    onRemoveItem(id);
+    if (openRowId === id) setOpenRowId(null);
+  }
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button 
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative inline-flex items-center justify-center p-2 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+        aria-label="การแจ้งเตือน"
+      >
+        <Bell className="w-6 h-6 text-gray-700" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 origin-top-right">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <Bell size={16} /> แจ้งเตือน ({unreadCount})
+            </h3>
+            <div className="flex items-center gap-2">
+                {unreadCount > 0 && onMarkAllRead && (
+                    <button onClick={onMarkAllRead} className="text-xs text-primary hover:underline whitespace-nowrap">
+                        อ่านทั้งหมด
+                    </button>
+                )}
+                {notifications.length > 0 && onClearAll && (
+                    <button 
+                        onClick={onClearAll} 
+                        className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                        title="ลบทั้งหมด"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                )}
+            </div>
+          </div>
+          
+          <div className="max-h-[350px] overflow-y-auto overflow-x-hidden">
+            {notifications.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                <p className="text-sm">ไม่มีการแจ้งเตือน</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {notifications.map((item) => (
+                  <SwipeableNotificationRow 
+                    key={item.id} 
+                    item={item} 
+                    onClick={() => handleClickItem(item)}
+                    onDelete={handleDelete}
+                    onOpen={(id) => setOpenRowId(id)}
+                    isOpen={openRowId === item.id}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Common Components ---
 
 interface ModalProps {
   isOpen: boolean;
