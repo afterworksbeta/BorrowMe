@@ -355,7 +355,7 @@ export default function App() {
             <BoxIcon size={20} />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 text-lg leading-none transition-colors">Borrow Me</h1>
+            <h1 className="font-bold text-gray-900 text-lg leading-none transition-colors">BorrowMe</h1>
             <span className="text-xs text-gray-600">ระบบยืม-คืนของ</span>
           </div>
         </div>
