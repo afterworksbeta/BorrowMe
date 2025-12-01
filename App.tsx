@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import * as DB from './services/db';
 import { User, PopulatedBox, Item, Record, PendingBorrowAction, AdminNotification } from './types';
@@ -45,8 +44,8 @@ export default function App() {
   // Navigation Tick: A counter to force useEffect to trigger even if the tab value is the same
   const [navigationTick, setNavigationTick] = useState(0);
 
-  // Checkbox Style matching Admin (Orange Theme)
-  const orangeCheckboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-[#FED7AA] checked:border-[#FB923C] relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-[#FB923C] focus:outline-none focus:ring-2 focus:ring-[#FB923C] focus:ring-offset-1";
+  // Checkbox Style matching Admin (Orange Theme) - Updated to Blue/Secondary
+  const checkboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-secondary checked:border-secondary-dark relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1";
 
   // Initialization & "Realtime" Subscription
   useEffect(() => {
@@ -345,24 +344,25 @@ export default function App() {
 
   const renderHeader = () => {
     return (
-    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md shadow-sm border-b border-pink-100 transition-colors">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md shadow-sm border-b border-blue-50 transition-colors">
+      <div className="container mx-auto px-6 h-18 flex items-center justify-between py-3">
         <div 
-            className="flex items-center gap-2 cursor-pointer" 
+            className="flex items-center gap-3 cursor-pointer group" 
             onClick={() => setView('home')}
         >
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
-            <BoxIcon size={20} />
+          {/* Logo */}
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">
+            <BoxIcon size={22} />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 text-lg leading-none transition-colors">BorrowMe</h1>
-            <span className="text-xs text-gray-600">ระบบยืม-คืนของ</span>
+            <h1 className="font-extrabold text-primary-dark text-xl leading-none tracking-tight">BorrowMe</h1>
+            <span className="text-xs text-text-secondary font-medium">ระบบยืม-คืนของ</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
             {currentUser && (
-                <div className="mr-2">
+                <div className="mr-1">
                     <NotificationBell 
                         notifications={notifications} 
                         unreadCount={unreadCount}
@@ -385,22 +385,22 @@ export default function App() {
                         setAuthModalOpen(true);
                     }
                 }}
-                className="flex items-center gap-2 hover:bg-gray-50 p-1.5 rounded-full transition-colors"
+                className="flex items-center gap-2 hover:bg-gray-50 p-1.5 rounded-full transition-colors border border-transparent hover:border-gray-100"
             >
                 {currentUser ? (
                     currentUser.avatarUrl ? (
                         <img 
                             src={currentUser.avatarUrl} 
-                            className="w-9 h-9 rounded-full object-cover shadow-sm ring-2 ring-pink-100" 
+                            className="w-10 h-10 rounded-full object-cover shadow-sm ring-2 ring-white" 
                             alt={currentUser.name} 
                         />
                     ) : (
-                        <div className="w-9 h-9 bg-primary text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-pink-100">
+                        <div className="w-10 h-10 bg-secondary text-slate-900 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white">
                             {currentUser.name.charAt(0).toUpperCase()}
                         </div>
                     )
                 ) : (
-                    <div className="w-9 h-9 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center shadow-sm">
+                    <div className="w-10 h-10 bg-gray-100 text-gray-500 rounded-full flex items-center justify-center shadow-sm">
                         <UserIcon size={20} />
                     </div>
                 )}
@@ -410,20 +410,20 @@ export default function App() {
             {currentUser && isProfileMenuOpen && (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)}></div>
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2 animate-in fade-in slide-in-from-top-2">
-                        <div className="px-4 py-2 border-b border-gray-100 mb-2">
+                    <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 py-2 animate-in fade-in slide-in-from-top-2 ring-1 ring-black/5">
+                        <div className="px-5 py-3 border-b border-gray-50 mb-2">
                             <p className="text-sm font-bold text-gray-900 truncate">{currentUser.name}</p>
                             <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
                         </div>
                         
                         {currentUser.role !== 'admin' && (
-                            <button onClick={() => { setView('user'); setIsProfileMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 flex items-center transition-colors">
-                                <Package size={16} className="mr-2" /> รายการของฉัน
+                            <button onClick={() => { setView('user'); setIsProfileMenuOpen(false); }} className="w-full text-left px-5 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-primary flex items-center transition-colors font-medium">
+                                <Package size={16} className="mr-3" /> รายการของฉัน
                             </button>
                         )}
                         
-                        <button onClick={() => handleOpenSettings('profile')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 flex items-center transition-colors">
-                            <UserIcon size={16} className="mr-2" /> โปรไฟล์
+                        <button onClick={() => handleOpenSettings('profile')} className="w-full text-left px-5 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-primary flex items-center transition-colors font-medium">
+                            <UserIcon size={16} className="mr-3" /> โปรไฟล์
                         </button>
 
                         {currentUser.role === 'admin' && (
@@ -434,19 +434,21 @@ export default function App() {
                                     setNavigationTick(prev => prev + 1);
                                     setIsProfileMenuOpen(false);
                                 }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 flex items-center transition-colors"
+                                className="w-full text-left px-5 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-primary flex items-center transition-colors font-medium"
                             >
-                                <BoxIcon size={16} className="mr-2" /> จัดการกล่อง
+                                <BoxIcon size={16} className="mr-3" /> จัดการกล่อง
                             </button>
                         )}
                         
-                        <button 
-                          type="button"
-                          onClick={handleLogout} 
-                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center mt-1 border-t border-gray-50 transition-colors"
-                        >
-                            <LogOut size={16} className="mr-2" /> ออกจากระบบ
-                        </button>
+                        <div className="mt-2 pt-2 border-t border-gray-50">
+                            <button 
+                              type="button"
+                              onClick={handleLogout} 
+                              className="w-full text-left px-5 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors font-medium"
+                            >
+                                <LogOut size={16} className="mr-3" /> ออกจากระบบ
+                            </button>
+                        </div>
                     </div>
                 </>
             )}
@@ -458,35 +460,53 @@ export default function App() {
   };
 
   const HomeView = () => (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 text-center md:text-left">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2 transition-colors">รายการทั้งหมด</h2>
-        <p className="text-gray-600 transition-colors">เลือกกล่องเพื่อดูสิ่งของภายในและทำการยืม</p>
+    <div className="container mx-auto px-4 py-10">
+      <div className="mb-10 text-center md:text-left bg-white p-8 rounded-3xl shadow-soft border border-blue-50 relative overflow-hidden">
+        {/* Decor */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-secondary/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+        
+        <div className="relative z-10">
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-3 tracking-tight">
+                รายการทั้งหมด <span className="text-primary text-4xl">.</span>
+            </h2>
+            <p className="text-gray-600 text-lg">เลือกกล่องเพื่อดูสิ่งของภายในและทำการยืม</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {boxes.map(box => (
           <div 
             key={box.boxId} 
-            className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 border border-transparent hover:border-pink-200 cursor-pointer overflow-hidden"
+            className="group bg-surface rounded-3xl shadow-card hover:shadow-soft transition-all duration-300 border border-gray-100 hover:border-primary/30 cursor-pointer overflow-hidden transform hover:-translate-y-1"
             onClick={() => setSelectedBox(box)}
           >
             <div className="w-full aspect-[16/9] relative overflow-hidden bg-gray-100">
-                <img src={box.coverImageUrl} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500" alt={box.boxName} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                <div className="absolute bottom-4 left-4">
-                    <span className="text-xs font-bold bg-white/95 text-gray-900 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm border border-gray-100">{box.boxType}</span>
+                <img src={box.coverImageUrl} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" alt={box.boxName} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
+                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+                    <span className="text-xs font-bold bg-white/95 text-gray-900 backdrop-blur-sm px-3 py-1.5 rounded-xl shadow-sm">{box.boxType}</span>
                 </div>
             </div>
-            <div className="p-5">
-              <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-primary transition-colors">{box.boxName}</h3>
-              <p className="text-sm text-gray-600 mb-4 transition-colors">
-                  ของทั้งหมด {box.itemCount} รายการ <span className="mx-1">•</span> <span className="text-green-700 font-medium">พร้อม {box.availableCount} รายการ</span>
-              </p>
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-primary transition-colors line-clamp-1">{box.boxName}</h3>
+              
+              <div className="mb-6 mt-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <span className="text-gray-600 font-medium">ของทั้งหมด {box.itemCount} รายการ</span>
+                      <span className="text-gray-300 hidden sm:inline">|</span>
+                      <span className="text-green-600 font-bold">พร้อม {box.availableCount} รายการ</span>
+                  </div>
+                  {box.itemCount > box.availableCount && (
+                      <p className="text-xs text-gray-400 mt-1.5 font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+                          กำลังถูกยืม {box.itemCount - box.availableCount} รายการ
+                      </p>
+                  )}
+              </div>
+
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="w-full border-primary text-primary hover:bg-primary hover:text-white"
+                className="w-full rounded-xl border-gray-200 text-gray-600 hover:border-primary hover:text-primary hover:bg-blue-50 font-bold"
               >
                 ดูรายละเอียด
               </Button>
@@ -504,19 +524,20 @@ export default function App() {
     const hasItems = boxItems.length > 0;
     
     return (
-        <div className="space-y-2 w-full">
+        <div className="space-y-3 w-full">
             <Button 
                size="lg" 
-               className="w-full text-base py-3 shadow-sm" 
+               className="w-full text-base py-3.5 shadow-lg shadow-blue-200" 
                disabled={availableCount === 0 || !hasItems}
                onClick={() => handleBorrowBoxClick(selectedBox.boxId)}
             >
                {availableCount > 0 ? 'ยืมกล่องนี้ทั้งหมด' : 'ไม่มีของที่พร้อมยืมในกล่องนี้'}
             </Button>
             {availableCount > 0 && (
-                <p className="text-center text-xs text-gray-500">
-                    (จะยืมรายการที่สถานะ "พร้อม" ทั้งหมด {availableCount} รายการ)
-                </p>
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500 bg-gray-50 py-2 rounded-lg">
+                    <CheckCircle2 size={14} className="text-success" />
+                    จะยืมรายการที่สถานะ "พร้อม" ทั้งหมด {availableCount} รายการ
+                </div>
             )}
         </div>
     );
@@ -528,11 +549,11 @@ export default function App() {
   const borrowFooter = borrowTargetBox ? (
     <div className="w-full">
         <div className="flex gap-3 w-full">
-            <Button variant="secondary" className="flex-1" onClick={() => setBorrowModalOpen(false)}>ยกเลิก</Button>
+            <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 shadow-none" onClick={() => setBorrowModalOpen(false)}>ยกเลิก</Button>
             <Button className="flex-1" onClick={confirmBorrow} disabled={!isBorrowValid}>ยืนยันการยืม</Button>
         </div>
         {!isBorrowValid && (
-            <p className="text-xs text-danger text-center mt-2 animate-pulse">
+            <p className="text-xs text-danger text-center mt-3 font-medium animate-pulse">
                 * กรุณาเช็ครายการสิ่งของและอัปโหลดรูปภาพก่อนยืนยันการยืม
             </p>
         )}
@@ -542,31 +563,35 @@ export default function App() {
   if (isLoading) return <LoadingScreen />;
 
   return (
-    <div className="min-h-screen pb-10 bg-bg transition-colors duration-200">
+    <div className="min-h-screen pb-10 bg-bg font-sans selection:bg-secondary/30 selection:text-primary-dark">
       {renderHeader()}
       
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom-5">
-          <div className="bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2">
-            <CheckCircle2 size={18} className="text-green-400" />
-            <span className="font-medium text-sm">{toastMessage}</span>
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom-5">
+          <div className="bg-slate-800 text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700">
+            <div className="bg-green-500 rounded-full p-1 text-white">
+                <CheckCircle2 size={16} />
+            </div>
+            <span className="font-bold text-sm">{toastMessage}</span>
           </div>
         </div>
       )}
 
       {/* Sub Navigation */}
       {view === 'user' && currentUser && (
-           <div className="bg-white border-b border-gray-200 transition-colors">
+           <div className="bg-white border-b border-gray-100 transition-colors shadow-sm relative z-30">
                 <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                     <h2 className="text-xl font-bold text-gray-800">จัดการรายการยืม-คืน</h2>
-                     <Button variant="secondary" size="sm" onClick={() => setView('home')}>ไปหน้าแรก</Button>
+                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <Package className="text-secondary" /> จัดการรายการยืม-คืน
+                     </h2>
+                     <Button variant="outline" size="sm" onClick={() => setView('home')} className="rounded-lg border-gray-200 text-gray-600">ไปหน้าแรก</Button>
                 </div>
            </div>
       )}
 
       {/* Main Content */}
-      <main className="animate-in fade-in duration-300">
+      <main className="animate-in fade-in duration-500 slide-in-from-bottom-2">
         {view === 'home' && <HomeView />}
         {view === 'user' && currentUser && (
             <UserView userId={currentUser.userId} records={records} items={items} boxes={boxes} />
@@ -610,20 +635,27 @@ export default function App() {
       >
         {selectedBox && (
           <div className="flex flex-col h-full">
-             <div className="mb-4">
-                 <p className="text-sm text-gray-600">ประเภท: <span className="font-medium text-gray-900">{selectedBox.boxType}</span></p>
+             <div className="mb-6 flex items-center gap-3 bg-blue-50 p-3 rounded-xl">
+                 <div className="p-2 bg-white rounded-lg shadow-sm">
+                    <Package size={20} className="text-primary" />
+                 </div>
+                 <div>
+                    <p className="text-xs text-gray-500 font-bold uppercase">ประเภทกล่อง</p>
+                    <p className="font-bold text-gray-900">{selectedBox.boxType}</p>
+                 </div>
              </div>
              
              <div className="space-y-3">
+                 <h4 className="font-bold text-gray-900 mb-2">สิ่งของภายในกล่อง</h4>
                  {/* Group items by name to avoid duplicates in list */}
                  {groupItemsByName(items.filter(i => i.boxId === selectedBox.boxId)).map((group, idx) => (
-                     <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                         <div className="flex items-center gap-3">
-                             <img src={group.img} className="w-12 h-12 rounded-md object-cover bg-gray-200" alt={group.name} />
+                     <div key={idx} className="flex items-center justify-between p-3 border border-gray-100 bg-white rounded-xl hover:shadow-sm hover:border-blue-100 transition-all">
+                         <div className="flex items-center gap-4">
+                             <img src={group.img} className="w-12 h-12 rounded-lg object-cover bg-gray-100" alt={group.name} />
                              <div>
-                                 <h4 className="font-medium text-gray-900">{group.name}</h4>
-                                 <div className="flex gap-2 text-xs mt-1">
-                                     <span className="text-gray-500">จำนวนทั้งหมด {group.count} รายการ</span>
+                                 <h4 className="font-bold text-gray-900 text-sm">{group.name}</h4>
+                                 <div className="flex gap-2 text-xs mt-0.5">
+                                     <span className="text-gray-500 font-medium">จำนวนทั้งหมด {group.count} รายการ</span>
                                  </div>
                              </div>
                          </div>
@@ -643,19 +675,22 @@ export default function App() {
         footer={borrowFooter}
       >
         {borrowTargetBox && (
-            <div className="space-y-6">
+            <div className="space-y-8">
                 {/* 1. Item List */}
                 <div>
-                    <h4 className="text-sm font-bold text-gray-900 mb-2">เช็ครายการสิ่งของในกล่องนี้</h4>
-                    <div className="space-y-2 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50/50">
+                    <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-gray-900">เช็ครายการสิ่งของในกล่องนี้</h4>
+                        <Badge status="available" />
+                    </div>
+                    <div className="space-y-2 border border-gray-100 rounded-2xl p-4 max-h-56 overflow-y-auto bg-gray-50">
                         {/* Group items by name to show checklist summary */}
                         {groupItemsByName(items.filter(i => i.boxId === borrowTargetBox.boxId && i.itemStatus === 'available')).map((group, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded shadow-sm justify-between">
+                            <div key={idx} className="flex items-center gap-3 p-2.5 bg-white rounded-xl shadow-sm border border-gray-100 justify-between">
                                 <div className="flex items-center gap-3">
-                                    <img src={group.img} className="w-10 h-10 object-cover rounded" alt="" />
-                                    <span className="text-gray-900 text-sm font-medium">{group.name}</span>
+                                    <img src={group.img} className="w-10 h-10 object-cover rounded-lg bg-gray-100" alt="" />
+                                    <span className="text-gray-900 text-sm font-bold">{group.name}</span>
                                 </div>
-                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full border border-gray-200">
+                                <span className="text-xs bg-secondary/10 text-slate-800 font-bold px-2.5 py-1 rounded-lg border border-secondary/20">
                                     x{group.count}
                                 </span>
                             </div>
@@ -664,15 +699,15 @@ export default function App() {
                 </div>
 
                 {/* 2. Checkbox Confirmation */}
-                <div>
-                    <label className="flex items-center space-x-3 cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors">
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <label className="flex items-center space-x-3 cursor-pointer">
                         <input 
                             type="checkbox" 
-                            className={orangeCheckboxClass}
+                            className={checkboxClass}
                             checked={hasCheckedItems}
                             onChange={(e) => setHasCheckedItems(e.target.checked)}
                         />
-                        <span className="text-gray-900 text-sm font-medium">ฉันได้ตรวจสอบรายการสิ่งของในกล่องนี้แล้ว</span>
+                        <span className="text-gray-800 text-sm font-bold">ฉันได้ตรวจสอบรายการสิ่งของในกล่องนี้แล้ว</span>
                     </label>
                 </div>
 
@@ -690,28 +725,28 @@ export default function App() {
                   {!borrowProofFile ? (
                     <div 
                         onClick={() => borrowFileInputRef.current?.click()}
-                        className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 hover:border-primary/50 transition-all cursor-pointer group"
+                        className="border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center justify-center bg-white hover:bg-blue-50/30 hover:border-primary/50 transition-all cursor-pointer group"
                     >
-                        <div className="p-3 bg-white rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
-                            <Upload className="w-6 h-6 text-primary" />
+                        <div className="p-4 bg-blue-50 text-primary rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                            <Upload className="w-6 h-6" />
                         </div>
-                        <p className="text-gray-800 font-medium text-sm">อัปโหลดรูปกล่อง/สิ่งของที่ยืม เพื่อใช้ประกอบการยืนยัน</p>
-                        <p className="text-xs text-gray-500 mt-1">รองรับไฟล์ JPG, PNG</p>
+                        <p className="text-gray-800 font-bold text-sm">อัปโหลดรูปกล่อง/สิ่งของที่ยืม</p>
+                        <p className="text-xs text-gray-500 mt-1">เพื่อใช้ประกอบการยืนยัน (JPG, PNG)</p>
                     </div>
                   ) : (
-                    <div className="border border-green-200 bg-green-50 rounded-lg p-4 flex items-center justify-between">
+                    <div className="border border-green-200 bg-green-50 rounded-2xl p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-100 rounded-lg text-green-600">
+                            <div className="p-2.5 bg-green-100 rounded-xl text-green-600">
                                 <FileText className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-green-800 truncate max-w-[200px]">{borrowProofFile.name}</p>
-                                <p className="text-xs text-green-600">{(borrowProofFile.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-sm font-bold text-green-800 truncate max-w-[200px]">{borrowProofFile.name}</p>
+                                <p className="text-xs text-green-600 font-medium">{(borrowProofFile.size / 1024).toFixed(1)} KB</p>
                             </div>
                         </div>
                         <button 
                             onClick={handleRemoveBorrowFile}
-                            className="p-1 hover:bg-green-100 rounded-full text-green-700 transition-colors"
+                            className="p-1.5 hover:bg-green-100 rounded-full text-green-700 transition-colors"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -721,23 +756,23 @@ export default function App() {
 
                 {/* 4. Duration Selector */}
                 <div>
-                    <label className="block text-sm font-bold text-gray-800 mb-2">จำนวนวันที่ต้องการยืม</label>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <label className="block text-sm font-bold text-gray-800 mb-3">จำนวนวันที่ต้องการยืม</label>
+                    <div className="flex items-center gap-3 flex-wrap">
                          {[3, 7, 14, 30].map(d => (
                              <button
                                 key={d}
                                 onClick={() => setBorrowDays(d)}
-                                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all transform active:scale-95 ${
                                     borrowDays === d 
-                                    ? 'bg-primary text-white border-primary' 
-                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                    ? 'bg-primary text-white shadow-lg shadow-blue-200' 
+                                    : 'bg-white text-gray-600 border border-gray-200 hover:border-primary hover:text-primary'
                                 }`}
                              >
                                  {d} วัน
                              </button>
                          ))}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">* กรุณาคืนภายในวันที่กำหนด</p>
+                    <p className="text-xs text-gray-400 mt-3 font-medium">* กรุณาคืนภายในวันที่กำหนด</p>
                 </div>
             </div>
         )}

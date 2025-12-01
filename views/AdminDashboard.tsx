@@ -1,9 +1,8 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { PopulatedBox, Item, Record, RecordStatus } from '../types';
 import { Button, Input, Modal, Select } from '../components/Common';
 import * as DB from '../services/db';
-import { Plus, Edit, Trash, Search, Upload, Image as ImageIcon, AlertTriangle, X } from 'lucide-react';
+import { Plus, Edit, Trash, Search, Upload, Image as ImageIcon, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 
 interface AdminDashboardProps {
   boxes: PopulatedBox[];
@@ -27,13 +26,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ boxes, records, items, 
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex space-x-4 mb-8 overflow-x-auto pb-2">
+      {/* Updated Tab Style: Blue Theme */}
+      <div className="flex space-x-3 mb-8 overflow-x-auto pb-2">
         <TabButton active={activeTab === 'boxes'} onClick={() => setActiveTab('boxes')}>จัดการกล่อง</TabButton>
         <TabButton active={activeTab === 'approvals'} onClick={() => setActiveTab('approvals')}>รออนุมัติการคืน</TabButton>
         <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')}>ประวัติการยืม-คืนทั้งหมด</TabButton>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-6 min-h-[500px]">
+      <div className="bg-white rounded-3xl shadow-card border border-gray-100 p-8 min-h-[500px]">
         {activeTab === 'boxes' && <BoxManagementView boxes={boxes} />}
         {activeTab === 'approvals' && <ApprovalsView records={records} items={items} boxes={boxes} />}
         {activeTab === 'history' && <HistoryView records={records} boxes={boxes} items={items} onDeleteRecords={onDeleteRecords} />}
@@ -45,8 +45,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ boxes, records, items, 
 const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
   <button
     onClick={onClick}
-    className={`px-6 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
-      active ? 'bg-primary text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+    className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${
+      active ? 'bg-primary text-white shadow-lg shadow-blue-200' : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
     }`}
   >
     {children}
@@ -177,27 +177,27 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {boxes.map(box => (
-          <div key={box.boxId} className="border border-gray-200 rounded-lg p-4 flex flex-col hover:border-pink-200 transition-colors group bg-white">
+          <div key={box.boxId} className="border border-gray-100 rounded-2xl p-4 flex flex-col hover:border-primary/50 hover:shadow-lg hover:shadow-blue-100/50 transition-all group bg-white">
             <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-md overflow-hidden aspect-[16/9] border border-gray-100">
+                <div className="w-16 h-16 rounded-xl overflow-hidden aspect-[16/9] border border-gray-100 bg-gray-50">
                     <img src={box.coverImageUrl} className="w-full h-full object-cover object-center" alt="" />
                 </div>
                 <div>
-                    <h3 className="font-bold text-gray-900 line-clamp-1">{box.boxName}</h3>
-                    <p className="text-sm text-gray-600 line-clamp-1">{box.boxType}</p>
+                    <h3 className="font-bold text-gray-900 line-clamp-1 group-hover:text-primary transition-colors">{box.boxName}</h3>
+                    <p className="text-xs text-gray-500 font-medium line-clamp-1">{box.boxType}</p>
                 </div>
             </div>
-            <div className="mt-auto flex justify-between items-center text-sm">
-                <span className="text-gray-700">สิ่งของ {box.itemCount} รายการ</span>
-                <div className="space-x-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="mt-auto flex justify-between items-center text-sm border-t border-gray-50 pt-3">
+                <span className="text-gray-700 font-medium">สิ่งของ {box.itemCount} รายการ</span>
+                <div className="space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex">
                     <button 
-                        className="text-orange-600 hover:text-orange-700 p-1 hover:bg-orange-50 rounded"
+                        className="text-gray-400 hover:text-secondary-dark p-1.5 hover:bg-yellow-50 rounded-lg transition-colors"
                         onClick={(e) => { e.stopPropagation(); handleEditBox(box); }}
                     >
                         <Edit className="w-4 h-4" />
                     </button>
                     <button 
-                        className="text-red-600 hover:text-red-700 p-1 hover:bg-red-50 rounded"
+                        className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
                         onClick={(e) => { e.stopPropagation(); handleRequestDeleteBox(box); }}
                     >
                         <Trash className="w-4 h-4" />
@@ -213,12 +213,12 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
         onClose={() => setIsModalOpen(false)} 
         title={editingBoxId ? "แก้ไขกล่อง" : "เพิ่มกล่องใหม่"}
         maxWidth="max-w-3xl"
-        footer={<Button className="w-full" onClick={handleCreate}>{editingBoxId ? "บันทึกการแก้ไข" : "บันทึกกล่อง"}</Button>}
+        footer={<Button className="w-full shadow-lg shadow-blue-200" onClick={handleCreate}>{editingBoxId ? "บันทึกการแก้ไข" : "บันทึกกล่อง"}</Button>}
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
             {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                    <AlertTriangle size={16} />
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                    <AlertTriangle size={18} />
                     {error}
                 </div>
             )}
@@ -238,39 +238,39 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
             </div>
             
             <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">รูปปกกล่อง</label>
+                <label className="block text-sm font-bold text-gray-800 mb-2">รูปปกกล่อง</label>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleCoverFileChange} />
                 <div className="flex items-center gap-4">
                     <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                         <Upload className="w-4 h-4 mr-2" /> อัปโหลดรูปปก
                     </Button>
                     {formData.coverFile && (
-                        <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
+                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 font-medium">
                              <ImageIcon className="w-4 h-4" />
                              <span>{formData.coverFile.name}</span>
                         </div>
                     )}
                 </div>
                 {formData.coverUrlPreview && (
-                     <div className="mt-2 w-full aspect-[16/9] rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                     <div className="mt-3 w-full aspect-[16/9] rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm">
                         <img src={formData.coverUrlPreview} className="w-full h-full object-cover object-center" alt="Preview" />
                      </div>
                 )}
             </div>
             
-            <div className="border-t border-gray-100 pt-4">
-                <div className="flex justify-between items-center mb-2">
-                    <label className="text-sm font-medium text-gray-800">รายการสิ่งของในกล่อง</label>
+            <div className="border-t border-gray-100 pt-6">
+                <div className="flex justify-between items-center mb-4">
+                    <label className="text-sm font-bold text-gray-800">รายการสิ่งของในกล่อง</label>
                     <Button size="sm" variant="secondary" onClick={addItemRow}>+ เพิ่มรายการ</Button>
                 </div>
                 <div className="space-y-3">
                     {formData.items.map((item, idx) => (
-                        <div key={idx} className="flex gap-2 items-start bg-gray-50 p-2 rounded-lg">
+                        <div key={idx} className="flex gap-3 items-start bg-gray-50 p-3 rounded-xl border border-gray-100">
                             <div className="flex-[2]">
-                                <input placeholder="เช่น สายต่อพ่วง, ปลั๊กไฟ" className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm" value={item.name} onChange={e => updateItemRow(idx, 'name', e.target.value)} />
+                                <input placeholder="เช่น สายต่อพ่วง, ปลั๊กไฟ" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" value={item.name} onChange={e => updateItemRow(idx, 'name', e.target.value)} />
                             </div>
                             <div className="flex-[1]">
-                                <input type="number" min="1" placeholder="จำนวน" className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm" value={item.qty} onChange={e => updateItemRow(idx, 'qty', parseInt(e.target.value) || 1)} />
+                                <input type="number" min="1" placeholder="จำนวน" className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" value={item.qty} onChange={e => updateItemRow(idx, 'qty', parseInt(e.target.value) || 1)} />
                             </div>
                             <div className="flex-[2] flex flex-col justify-center">
                                 <input type="file" id={`item-upload-${idx}`} className="hidden" accept="image/*" onChange={(e) => {
@@ -282,15 +282,15 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                                     <button 
                                         type="button" 
                                         onClick={() => document.getElementById(`item-upload-${idx}`)?.click()}
-                                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 whitespace-nowrap"
+                                        className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 font-medium whitespace-nowrap"
                                     >
                                         <Upload className="w-3 h-3" />
                                         <span>อัปโหลดรูป</span>
                                     </button>
-                                    {item.img && <img src={item.img} className="w-9 h-9 rounded object-cover border border-gray-200" alt="Preview" />}
+                                    {item.img && <img src={item.img} className="w-9 h-9 rounded-lg object-cover border border-gray-200" alt="Preview" />}
                                 </div>
                             </div>
-                            <button onClick={() => removeItemRow(idx)} className="text-red-500 p-2 hover:bg-red-100 rounded mt-1"><X className="w-4 h-4" /></button>
+                            <button onClick={() => removeItemRow(idx)} className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg mt-0.5"><X className="w-4 h-4" /></button>
                         </div>
                     ))}
                 </div>
@@ -305,17 +305,20 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
         maxWidth="max-w-md"
         footer={
             <div className="flex gap-3 w-full">
-                <Button variant="secondary" className="flex-1" onClick={() => setDeleteTargetBox(null)}>ยกเลิก</Button>
+                <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200" onClick={() => setDeleteTargetBox(null)}>ยกเลิก</Button>
                 <Button variant="danger" className="flex-1" onClick={confirmDeleteBox}>ลบกล่องนี้</Button>
             </div>
         }
       >
-          <div className="text-center py-4">
-              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertTriangle size={24} />
+          <div className="text-center py-6">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+                  <AlertTriangle size={32} />
               </div>
-              <p className="text-gray-800">
-                  กล่อง <span className="font-bold">“{deleteTargetBox?.boxName}”</span> และรายการสิ่งของภายในจะถูกลบออกจากระบบ ไม่สามารถกู้คืนได้
+              <p className="text-gray-800 text-lg font-medium mb-1">
+                  ลบกล่อง <span className="font-bold text-gray-900">“{deleteTargetBox?.boxName}”</span> ?
+              </p>
+              <p className="text-sm text-gray-500">
+                  รายการสิ่งของภายในจะถูกลบออกจากระบบ ไม่สามารถกู้คืนได้
               </p>
           </div>
       </Modal>
@@ -373,25 +376,30 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
         <div>
             <h2 className="text-xl font-bold text-gray-900 mb-6">คำขอคืนของที่รออนุมัติ</h2>
             {Object.keys(groups).length === 0 ? (
-                <p className="text-gray-500 text-center py-10">ไม่มีรายการรออนุมัติ</p>
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                    <div className="bg-white p-4 rounded-full shadow-sm mb-3">
+                        <CheckCircle2 size={32} className="text-green-500 opacity-50" />
+                    </div>
+                    <p className="font-bold">ไม่มีรายการรออนุมัติ</p>
+                </div>
             ) : (
                 <div className="grid gap-4">
                     {Object.entries(groups).map(([key, groupRecords]) => {
                         const first = groupRecords[0];
                         const box = boxes.find(b => b.boxId === first.boxId);
                         return (
-                            <div key={key} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedGroup(groupRecords)}>
-                                <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+                            <div key={key} className="border border-gray-200 bg-white rounded-2xl p-5 flex justify-between items-center hover:border-primary/40 hover:shadow-lg hover:shadow-blue-100/50 cursor-pointer transition-all" onClick={() => setSelectedGroup(groupRecords)}>
+                                <div className="flex items-center gap-5">
+                                    <div className="h-14 w-14 bg-secondary text-slate-900 rounded-xl flex items-center justify-center font-bold text-lg shadow-sm">
                                         {groupRecords.length}
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-gray-900">{box?.boxName || 'Unknown Box'}</h3>
-                                        <p className="text-sm text-gray-700">ผู้ขอคืน: {first.userName} ({first.userPhone})</p>
-                                        <p className="text-xs text-gray-500">ขอคืนเมื่อ: {new Date(first.returnRequestDate || '').toLocaleString('th-TH')}</p>
+                                        <h3 className="font-bold text-gray-900 text-lg">{box?.boxName || 'Unknown Box'}</h3>
+                                        <p className="text-sm text-gray-600 font-medium">ผู้ขอคืน: <span className="text-primary-dark">{first.userName}</span> ({first.userPhone})</p>
+                                        <p className="text-xs text-gray-400 mt-1">ขอคืนเมื่อ: {new Date(first.returnRequestDate || '').toLocaleString('th-TH')}</p>
                                     </div>
                                 </div>
-                                <Button size="sm" variant="outline">ตรวจสอบ</Button>
+                                <Button size="sm" variant="outline" className="rounded-xl border-gray-200">ตรวจสอบ</Button>
                             </div>
                         )
                     })}
@@ -405,28 +413,41 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
                 maxWidth="max-w-3xl"
                 footer={selectedGroup && (
                     <div className="flex gap-4 w-full">
-                        <Button className="flex-1" variant="danger" onClick={() => handleApprove(false)}>ไม่อนุมัติ</Button>
-                        <Button className="flex-1" variant="success" onClick={() => handleApprove(true)}>อนุมัติการคืน</Button>
+                        <Button className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 shadow-none" variant="danger" onClick={() => handleApprove(false)}>ไม่อนุมัติ</Button>
+                        <Button className="flex-1 shadow-lg shadow-green-200" variant="success" onClick={() => handleApprove(true)}>อนุมัติการคืน</Button>
                     </div>
                 )}
             >
                 {selectedGroup && (
-                    <div className="space-y-6">
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <h4 className="font-bold mb-2 text-gray-900">ข้อมูลผู้คืน</h4>
-                            <p className="text-sm text-gray-700">ชื่อ: {selectedGroup[0].userName}</p>
-                            <p className="text-sm text-gray-700">อีเมล: {selectedGroup[0].userEmail}</p>
-                            <p className="text-sm text-gray-700">เบอร์โทร: {selectedGroup[0].userPhone}</p>
+                    <div className="space-y-8">
+                        <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100">
+                            <h4 className="font-bold mb-3 text-gray-900 flex items-center gap-2">
+                                <Search size={18} className="text-primary" /> ข้อมูลผู้คืน
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <span className="text-xs text-gray-500 font-bold uppercase">ชื่อ</span>
+                                    <p className="text-sm text-gray-900 font-medium">{selectedGroup[0].userName}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-gray-500 font-bold uppercase">อีเมล</span>
+                                    <p className="text-sm text-gray-900 font-medium">{selectedGroup[0].userEmail}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-gray-500 font-bold uppercase">เบอร์โทร</span>
+                                    <p className="text-sm text-gray-900 font-medium">{selectedGroup[0].userPhone}</p>
+                                </div>
+                            </div>
                         </div>
                         <div>
-                            <h4 className="font-bold mb-2 text-gray-900">รายการที่คืน ({selectedGroup.length})</h4>
-                            <div className="space-y-2">
+                            <h4 className="font-bold mb-3 text-gray-900">รายการที่คืน ({selectedGroup.length})</h4>
+                            <div className="space-y-3 max-h-60 overflow-y-auto">
                                 {groupedSelectedItems.map((g, idx) => (
-                                    <div key={idx} className="flex items-center gap-3 border border-gray-200 p-2 rounded hover:bg-white">
-                                        <img src={g.img} className="w-10 h-10 object-cover rounded" alt=""/>
+                                    <div key={idx} className="flex items-center gap-4 border border-gray-100 p-3 rounded-xl bg-white hover:border-blue-200 transition-colors">
+                                        <img src={g.img} className="w-12 h-12 object-cover rounded-lg bg-gray-100" alt=""/>
                                         <div>
-                                            <span className="text-sm font-medium text-gray-800 block">{g.name}</span>
-                                            {g.count > 1 && <span className="text-xs text-gray-500">จำนวน {g.count} รายการ</span>}
+                                            <span className="text-sm font-bold text-gray-900 block">{g.name}</span>
+                                            {g.count > 1 && <span className="text-xs text-primary font-bold bg-blue-50 px-2 py-0.5 rounded">x {g.count} รายการ</span>}
                                         </div>
                                     </div>
                                 ))}
@@ -434,8 +455,10 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
                         </div>
                         {selectedGroup[0].proofImageUrl && (
                             <div>
-                                <h4 className="font-bold mb-2 text-gray-900">รูปหลักฐาน</h4>
-                                <img src={selectedGroup[0].proofImageUrl} className="w-full max-h-60 object-contain bg-black rounded" alt="Proof" />
+                                <h4 className="font-bold mb-3 text-gray-900">รูปหลักฐาน</h4>
+                                <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+                                    <img src={selectedGroup[0].proofImageUrl} className="w-full max-h-80 object-contain bg-gray-50" alt="Proof" />
+                                </div>
                             </div>
                         )}
                     </div>
@@ -483,11 +506,11 @@ const getDueStatus = (borrowedAtStr: string, daysBorrowed: number, status: strin
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays > 0) {
-    return { label: `อีก ${diffDays} วันถึงกำหนดคืน`, className: "text-gray-500" };
+    return { label: `อีก ${diffDays} วันถึงกำหนดคืน`, className: "text-gray-400 font-medium" };
   } else if (diffDays === 0) {
-    return { label: "ถึงกำหนดคืนวันนี้", className: "text-orange-600 font-bold" };
+    return { label: "ถึงกำหนดคืนวันนี้", className: "text-secondary-dark font-bold" };
   } else {
-    return { label: `เกินกำหนดคืน ${Math.abs(diffDays)} วันแล้ว`, className: "text-red-600 font-bold" };
+    return { label: `เกินกำหนดคืน ${Math.abs(diffDays)} วันแล้ว`, className: "text-red-500 font-bold" };
   }
 };
 
@@ -670,8 +693,8 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
         setShowDeleteConfirm(false);
     };
 
-    // Custom Checkbox Style
-    const customCheckboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-gray-100 checked:border-gray-300 relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-primary indeterminate:bg-gray-100 indeterminate:border-gray-300 indeterminate:after:content-[''] indeterminate:after:absolute indeterminate:after:top-1/2 indeterminate:after:left-1/2 indeterminate:after:-translate-x-1/2 indeterminate:after:-translate-y-1/2 indeterminate:after:w-2.5 indeterminate:after:h-0.5 indeterminate:after:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+    // Custom Checkbox Style (Secondary Theme)
+    const customCheckboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-secondary checked:border-secondary-dark relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-slate-900 indeterminate:bg-secondary/50 indeterminate:border-secondary-dark indeterminate:after:content-[''] indeterminate:after:absolute indeterminate:after:top-1/2 indeterminate:after:left-1/2 indeterminate:after:-translate-x-1/2 indeterminate:after:-translate-y-1/2 indeterminate:after:w-2.5 indeterminate:after:h-0.5 indeterminate:after:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-secondary/50";
 
     return (
         <div>
@@ -683,7 +706,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                         variant="danger" 
                         size="sm" 
                         onClick={() => setShowDeleteConfirm(true)}
-                        className="animate-in fade-in"
+                        className="animate-in fade-in rounded-lg"
                     >
                         <Trash className="w-4 h-4 mr-2" />
                         ลบที่เลือก ({selectedGroupIds.size} รายการ)
@@ -691,14 +714,14 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                 )}
              </div>
 
-             <div className="bg-gray-50 p-4 rounded-lg mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 border border-gray-100 items-start">
+             <div className="bg-bg p-5 rounded-2xl mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 border border-blue-50 items-start">
                 <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">ค้นหา</label>
+                    <label className="block text-sm font-bold text-gray-800 mb-2">ค้นหา</label>
                     <div className="relative">
                         <input 
                             type="text" 
                             placeholder="ชื่อผู้ยืม, ชื่อกล่อง..." 
-                            className="w-full bg-gray-100 border border-gray-300 text-gray-900 placeholder:text-gray-500 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+                            className="w-full bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -720,15 +743,15 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                 </div>
              </div>
 
-             <div className="mb-4 text-sm font-medium text-gray-600">
+             <div className="mb-4 text-sm font-bold text-gray-500">
                 พบ {filteredGroups.length} รายการ (กล่อง)
              </div>
 
-             <div className="overflow-x-auto border border-gray-200 rounded-lg">
+             <div className="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
                  <table className="w-full text-sm text-left">
-                     <thead className="bg-gray-50 text-gray-900 font-semibold border-b border-gray-200">
+                     <thead className="bg-gray-50 text-gray-900 font-bold border-b border-gray-200 uppercase text-xs tracking-wider">
                          <tr>
-                             <th className="py-3 px-4 w-10 text-center">
+                             <th className="py-4 px-4 w-10 text-center">
                                  <input 
                                      type="checkbox" 
                                      ref={headerCheckboxRef}
@@ -736,17 +759,17 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                      className={customCheckboxClass}
                                  />
                              </th>
-                             <th className="py-3 px-4">วันที่ยืม</th>
-                             <th className="py-3 px-4">ผู้ยืม</th>
-                             <th className="py-3 px-4">กล่อง/จำนวน</th>
-                             <th className="py-3 px-4">สถานะ</th>
-                             <th className="py-3 px-4">วันที่คืน</th>
+                             <th className="py-4 px-4">วันที่ยืม</th>
+                             <th className="py-4 px-4">ผู้ยืม</th>
+                             <th className="py-4 px-4">กล่อง/จำนวน</th>
+                             <th className="py-4 px-4">สถานะ</th>
+                             <th className="py-4 px-4">วันที่คืน</th>
                          </tr>
                      </thead>
-                     <tbody className="divide-y divide-gray-100">
+                     <tbody className="divide-y divide-gray-50 bg-white">
                          {filteredGroups.length === 0 ? (
                              <tr>
-                                 <td colSpan={6} className="py-8 text-center text-gray-500">ไม่พบข้อมูลที่ค้นหา</td>
+                                 <td colSpan={6} className="py-12 text-center text-gray-400">ไม่พบข้อมูลที่ค้นหา</td>
                              </tr>
                          ) : (
                              filteredGroups.map(group => {
@@ -765,9 +788,9 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                  return (
                                     <tr 
                                         key={group.groupId} 
-                                        className={`transition-colors ${isSelected ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
+                                        className={`transition-colors ${isSelected ? 'bg-secondary/5' : 'hover:bg-blue-50/30'}`}
                                     >
-                                        <td className="py-3 px-4 text-center">
+                                        <td className="py-4 px-4 text-center">
                                             <input 
                                                 type="checkbox"
                                                 checked={isSelected}
@@ -775,28 +798,28 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                                 className={customCheckboxClass}
                                             />
                                         </td>
-                                        <td className="py-3 px-4 text-gray-800">{new Date(group.borrowedAt).toLocaleDateString('th-TH')}</td>
-                                        <td className="py-3 px-4">
-                                            <div className="font-medium text-gray-900">{group.userName}</div>
+                                        <td className="py-4 px-4 text-gray-800 font-medium">{new Date(group.borrowedAt).toLocaleDateString('th-TH')}</td>
+                                        <td className="py-4 px-4">
+                                            <div className="font-bold text-gray-900">{group.userName}</div>
                                             <div className="text-xs text-gray-500">{group.userEmail}</div>
                                         </td>
-                                        <td className="py-3 px-4">
-                                            <div className="font-medium text-gray-900">{box?.boxName || 'Unknown Box'}</div>
-                                            <div className="text-xs text-gray-500">ของทั้งหมด {group.records.length} รายการ</div>
+                                        <td className="py-4 px-4">
+                                            <div className="font-bold text-gray-900">{box?.boxName || 'Unknown Box'}</div>
+                                            <div className="text-xs text-gray-500 font-medium">ของทั้งหมด {group.records.length} รายการ</div>
                                         </td>
-                                        <td className="py-3 px-4">
+                                        <td className="py-4 px-4">
                                             {isPending ? (
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-orange-600 border border-orange-100">
+                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-secondary/20 text-yellow-800 border border-yellow-200">
                                                     รออนุมัติ
                                                 </span>
                                             ) : (
-                                                <div className="flex flex-col gap-1">
+                                                <div className="flex flex-col gap-1.5">
                                                     <div className="relative inline-block w-fit">
                                                         <select 
-                                                            className={`appearance-none text-xs rounded-full pl-3 pr-8 py-1 font-bold focus:outline-none focus:ring-2 cursor-pointer ${
+                                                            className={`appearance-none text-xs rounded-full pl-3 pr-8 py-1.5 font-bold focus:outline-none focus:ring-2 cursor-pointer transition-all ${
                                                                 group.status === 'returned'
-                                                                ? 'bg-green-100 text-green-800 border border-green-200 focus:ring-green-500' 
-                                                                : 'bg-amber-100 text-amber-800 border border-amber-200 focus:ring-amber-500'
+                                                                ? 'bg-gray-100 text-gray-600 border border-gray-200 focus:ring-gray-300' 
+                                                                : 'bg-blue-50 text-blue-700 border border-blue-200 focus:ring-primary'
                                                             }`}
                                                             value={selectValue}
                                                             onChange={(e) => {
@@ -814,7 +837,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                                             <option value="borrowing">กำลังยืมอยู่</option>
                                                             <option value="returned">คืนแล้ว</option>
                                                         </select>
-                                                        <div className={`pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 ${group.status === 'returned' ? 'text-green-800' : 'text-amber-800'}`}>
+                                                        <div className={`pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 ${group.status === 'returned' ? 'text-gray-500' : 'text-blue-700'}`}>
                                                             <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                                                         </div>
                                                     </div>
@@ -826,7 +849,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 text-gray-800">{returnDate}</td>
+                                        <td className="py-4 px-4 text-gray-800 font-medium">{returnDate}</td>
                                     </tr>
                                  )
                              })
@@ -843,19 +866,19 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                 maxWidth="max-w-md"
                 footer={
                     <div className="flex gap-3 w-full">
-                        <Button variant="secondary" className="flex-1" onClick={() => setShowDeleteConfirm(false)}>ยกเลิก</Button>
+                        <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200" onClick={() => setShowDeleteConfirm(false)}>ยกเลิก</Button>
                         <Button variant="danger" className="flex-1" onClick={confirmDeleteSelected}>ลบที่เลือก</Button>
                     </div>
                 }
             >
-                <div className="text-center py-4">
-                    <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <AlertTriangle size={24} />
+                <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+                        <AlertTriangle size={32} />
                     </div>
-                    <p className="text-gray-800 font-bold mb-2">
+                    <p className="text-gray-900 font-bold mb-2 text-lg">
                         ยืนยันการลบ {selectedGroupIds.size} รายการหรือไม่?
                     </p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-500 px-4">
                         การลบนี้จะลบประวัติการยืม-คืนออกจากระบบอย่างถาวร หากมีรายการที่กำลังยืมอยู่ สถานะของสิ่งของจะถูกปรับเป็น "ว่าง" โดยอัตโนมัติ
                     </p>
                 </div>

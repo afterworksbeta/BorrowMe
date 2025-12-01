@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { LucideIcon, Eye, EyeOff, Bell, CalendarClock, AlertCircle, CheckCircle, XCircle, FileText, Info, Trash2 } from 'lucide-react';
 
@@ -11,20 +10,23 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button: React.FC<ButtonProps> = ({ 
   children, variant = 'primary', size = 'md', isLoading, className = '', disabled, ...props 
 }) => {
-  const baseStyle = "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  // Added rounded-2xl for mascot theme
+  const baseStyle = "inline-flex items-center justify-center rounded-xl font-bold transition-all transform active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
   
   const variants = {
-    primary: "bg-primary text-white hover:bg-primary-hover focus:ring-primary",
-    secondary: "bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-400",
-    danger: "bg-danger text-white hover:bg-red-600 focus:ring-red-500",
-    success: "bg-success text-white hover:bg-green-600 focus:ring-green-500",
-    outline: "border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300",
+    // Primary: Bright Blue + White Text
+    primary: "bg-primary text-white hover:bg-primary-hover shadow-lg shadow-blue-200/50 focus:ring-primary",
+    // Secondary: Sunny Yellow + Dark Text (for contrast)
+    secondary: "bg-secondary text-slate-900 hover:bg-secondary-hover shadow-md focus:ring-secondary",
+    danger: "bg-danger text-white hover:bg-red-600 shadow-md shadow-red-200/50 focus:ring-red-500",
+    success: "bg-success text-white hover:bg-green-600 shadow-md shadow-green-200/50 focus:ring-green-500",
+    outline: "border-2 border-gray-200 text-gray-600 hover:border-primary hover:text-primary hover:bg-blue-50 focus:ring-gray-300",
   };
 
   const sizes = {
     sm: "px-3 py-1.5 text-xs",
-    md: "px-4 py-2 text-sm",
-    lg: "px-6 py-3 text-base",
+    md: "px-5 py-2.5 text-sm",
+    lg: "px-8 py-3.5 text-base",
   };
 
   return (
@@ -34,7 +36,7 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {isLoading ? (
-        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
       ) : null}
       {children}
     </button>
@@ -44,17 +46,17 @@ export const Button: React.FC<ButtonProps> = ({
 export const Badge: React.FC<{ status: string }> = ({ status }) => {
   const styles: Record<string, string> = {
     // Item Status
-    available: "bg-green-100 text-green-800 border border-green-200",
+    available: "bg-green-100 text-green-700 border-green-200",
     
     // Record Status
-    borrowing: "bg-amber-100 text-amber-800 border border-amber-200",      // กำลังยืมอยู่ (Orange)
-    pendingReturn: "bg-orange-100 text-orange-800 border border-orange-200",  // รออนุมัติ (Light Orange)
-    returned: "bg-emerald-100 text-emerald-800 border border-emerald-200",    // คืนแล้ว (Green/Emerald)
+    borrowing: "bg-blue-50 text-blue-700 border-blue-200",         // Changed to Blue for "Active"
+    pendingReturn: "bg-secondary/20 text-yellow-800 border-yellow-200", // Yellow for "Pending"
+    returned: "bg-gray-100 text-gray-600 border-gray-200",       // Gray for "History/Done"
     
     // Fallback/Legacy
-    borrowed: "bg-amber-100 text-amber-800 border border-amber-200",
-    checking: "bg-orange-100 text-orange-800 border border-orange-200",
-    rejected: "bg-red-100 text-red-800 border border-red-200",
+    borrowed: "bg-blue-50 text-blue-700 border-blue-200",
+    checking: "bg-secondary/20 text-yellow-800 border-yellow-200",
+    rejected: "bg-red-50 text-red-600 border-red-200",
   };
 
   const labels: Record<string, string> = {
@@ -72,7 +74,7 @@ export const Badge: React.FC<{ status: string }> = ({ status }) => {
   };
 
   return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${styles[status] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
       {labels[status] || status}
     </span>
   );
@@ -246,14 +248,14 @@ const SwipeableNotificationRow: React.FC<SwipeableNotificationRowProps> = ({ ite
   let rowClass = "bg-white hover:bg-slate-50 text-slate-500 border-l-transparent"; // Default Read
   let IconComponent = CalendarClock;
   let iconClass = "bg-gray-100 text-gray-300";
-  let dotColor = "bg-[#FB923C]";
+  let dotColor = "bg-secondary"; // Yellow dot for unread
 
   if (item.type === 'RETURN_REJECTED' || item.type === 'RETURN_REJECTED_NEW_REQUEST') {
        rowClass = item.isRead 
         ? "bg-white text-slate-500 border-l-transparent" 
         : "bg-red-50 hover:bg-red-100 text-slate-900 border-l-red-500";
        IconComponent = XCircle;
-       iconClass = item.isRead ? "bg-red-50 text-red-200" : "bg-red-100 text-red-600";
+       iconClass = item.isRead ? "bg-red-50 text-red-300" : "bg-red-100 text-red-600";
        dotColor = "bg-red-500";
   } 
   else if (item.type === 'OVERDUE' || item.type === 'BORROW_DUE_SOON') {
@@ -266,18 +268,18 @@ const SwipeableNotificationRow: React.FC<SwipeableNotificationRowProps> = ({ ite
   else if (item.type === 'BORROW_CREATED') {
       rowClass = item.isRead
        ? "bg-white text-slate-500 border-l-transparent"
-       : "bg-blue-50 hover:bg-blue-100 text-slate-900 border-l-blue-500";
+       : "bg-blue-50 hover:bg-blue-100 text-slate-900 border-l-primary";
       IconComponent = Info;
-      iconClass = item.isRead ? "bg-blue-50 text-blue-300" : "bg-blue-100 text-blue-600";
-      dotColor = "bg-blue-500";
+      iconClass = item.isRead ? "bg-blue-50 text-blue-300" : "bg-blue-100 text-primary";
+      dotColor = "bg-primary";
   }
   else if (item.type === 'RETURN_REQUESTED') {
       rowClass = item.isRead
        ? "bg-white text-slate-500 border-l-transparent"
-       : "bg-orange-50 hover:bg-orange-100 text-slate-900 border-l-orange-500";
+       : "bg-yellow-50 hover:bg-yellow-100 text-slate-900 border-l-secondary";
       IconComponent = CalendarClock;
-      iconClass = item.isRead ? "bg-orange-50 text-orange-300" : "bg-orange-100 text-orange-600";
-      dotColor = "bg-orange-500";
+      iconClass = item.isRead ? "bg-yellow-50 text-yellow-300" : "bg-yellow-100 text-yellow-600";
+      dotColor = "bg-secondary";
   }
   else if (!item.isRead) {
       rowClass = "bg-[#FFF7ED] hover:bg-[#FFEDD5] text-slate-900 border-l-[#FB923C]";
@@ -389,26 +391,26 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       <button 
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative inline-flex items-center justify-center p-2 rounded-full hover:bg-gray-100 transition-colors focus:outline-none"
+        className="relative inline-flex items-center justify-center p-2 rounded-full hover:bg-blue-50 text-gray-600 hover:text-primary transition-colors focus:outline-none"
         aria-label="การแจ้งเตือน"
       >
-        <Bell className="w-6 h-6 text-gray-700" />
+        <Bell className="w-6 h-6" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-secondary text-slate-900 border-2 border-white flex items-center justify-center text-[10px] font-bold shadow-sm">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 origin-top-right">
-          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+        <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 origin-top-right ring-1 ring-black/5">
+          <div className="bg-bg px-4 py-3 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              <Bell size={16} /> แจ้งเตือน ({unreadCount})
+              <Bell size={16} className="text-primary" /> แจ้งเตือน ({unreadCount})
             </h3>
             <div className="flex items-center gap-2">
                 {unreadCount > 0 && onMarkAllRead && (
-                    <button onClick={onMarkAllRead} className="text-xs text-primary hover:underline whitespace-nowrap">
+                    <button onClick={onMarkAllRead} className="text-xs text-primary font-bold hover:underline whitespace-nowrap">
                         อ่านทั้งหมด
                     </button>
                 )}
@@ -426,11 +428,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
           
           <div className="max-h-[350px] overflow-y-auto overflow-x-hidden">
             {notifications.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
+              <div className="p-8 text-center text-gray-500">
                 <p className="text-sm">ไม่มีการแจ้งเตือน</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-50">
                 {notifications.map((item) => (
                   <SwipeableNotificationRow 
                     key={item.id} 
@@ -469,26 +471,26 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
   return (
     <div className={`fixed inset-0 ${zIndex} flex items-center justify-center p-4 sm:p-6`}>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
       <div 
-        className={`relative bg-white rounded-2xl shadow-xl w-full ${maxWidth} max-h-[80vh] flex flex-col transform transition-all animate-in fade-in zoom-in-95 duration-200`}
+        className={`relative bg-surface rounded-3xl shadow-soft w-full ${maxWidth} max-h-[85vh] flex flex-col transform transition-all animate-in fade-in zoom-in-95 duration-200 border border-gray-100`}
       >
-        <div className="flex-none flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex-none flex items-center justify-between px-6 py-5 border-b border-gray-50">
           <h3 className="text-xl font-bold text-gray-900 line-clamp-1">{title}</h3>
           <button 
             onClick={onClose} 
-            className="p-2 -mr-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+            className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
           >
             <span className="text-2xl leading-none block">&times;</span>
           </button>
         </div>
         
-        <div className="flex-1 overflow-y-auto px-6 py-4 text-gray-800">
+        <div className="flex-1 overflow-y-auto px-6 py-6 text-gray-800">
           {children}
         </div>
 
         {footer && (
-          <div className="flex-none px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+          <div className="flex-none px-6 py-5 border-t border-gray-50 bg-bg/50 rounded-b-3xl">
             {footer}
           </div>
         )}
@@ -499,9 +501,9 @@ export const Modal: React.FC<ModalProps> = ({
 
 export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string }> = ({ label, className = '', ...props }) => (
   <div className="mb-4">
-    {label && <label className="block text-sm font-medium text-gray-800 mb-1">{label}</label>}
+    {label && <label className="block text-sm font-bold text-text-primary mb-1.5">{label}</label>}
     <input 
-      className={`w-full bg-gray-100 border border-gray-300 text-gray-900 placeholder:text-gray-500 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all ${className}`} 
+      className={`w-full bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${className}`} 
       {...props} 
     />
   </div>
@@ -512,20 +514,20 @@ export const PasswordInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>
 
   return (
     <div className="mb-4">
-      {label && <label className="block text-sm font-medium text-gray-800 mb-1">{label}</label>}
+      {label && <label className="block text-sm font-bold text-text-primary mb-1.5">{label}</label>}
       <div className="relative">
         <input 
           type={showPassword ? 'text' : 'password'}
-          className={`w-full bg-gray-100 border border-gray-300 text-gray-900 placeholder:text-gray-500 rounded-lg px-4 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all ${className}`} 
+          className={`w-full bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${className}`} 
           {...props} 
         />
         <button
           type="button"
           onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1 rounded-full hover:bg-gray-200"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors p-1.5 rounded-full hover:bg-blue-50"
           aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
         >
-          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
     </div>
@@ -539,17 +541,22 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select: React.FC<SelectProps> = ({ label, options, className = '', ...props }) => (
     <div className="mb-4">
-        {label && <label className="block text-sm font-medium text-gray-800 mb-1">{label}</label>}
-        <select
-            className={`w-full bg-gray-100 border border-gray-300 text-gray-900 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all ${className}`}
-            {...props}
-        >
-            {options.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                </option>
-            ))}
-        </select>
+        {label && <label className="block text-sm font-bold text-text-primary mb-1.5">{label}</label>}
+        <div className="relative">
+            <select
+                className={`w-full appearance-none bg-white border border-gray-200 text-gray-900 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${className}`}
+                {...props}
+            >
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                    </option>
+                ))}
+            </select>
+            <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+            </div>
+        </div>
     </div>
 );
 
@@ -561,17 +568,17 @@ export const Toggle: React.FC<{
 }> = ({ label, checked, onChange, description }) => (
   <div className="flex items-center justify-between py-3">
     <div>
-      <p className="text-sm font-medium text-gray-900">{label}</p>
-      {description && <p className="text-xs text-gray-500">{description}</p>}
+      <p className="text-sm font-bold text-gray-900">{label}</p>
+      {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
     </div>
     <button
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-        checked ? 'bg-primary' : 'bg-gray-300'
+      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+        checked ? 'bg-primary' : 'bg-gray-200'
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       />
@@ -580,8 +587,14 @@ export const Toggle: React.FC<{
 );
 
 export const LoadingScreen = () => (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mb-4"></div>
-        <p className="text-gray-600 font-medium">กำลังโหลด...</p>
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+        <div className="animate-bounce mb-4">
+             {/* Simple Logo Placeholder */}
+            <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-blue-300">
+                B
+            </div>
+        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary border-t-transparent mb-4"></div>
+        <p className="text-primary-dark font-bold">กำลังโหลด...</p>
     </div>
 )

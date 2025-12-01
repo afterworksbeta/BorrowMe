@@ -1,8 +1,7 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Record, Item, Box, RecordStatus } from '../types';
 import { Button, Badge, Modal } from '../components/Common';
-import { Package, Upload, FileText, X, Bell, AlertCircle } from 'lucide-react';
+import { Package, Upload, FileText, X, Bell, AlertCircle, CalendarClock } from 'lucide-react';
 import * as DB from '../services/db';
 
 interface UserViewProps {
@@ -31,7 +30,8 @@ const UserView: React.FC<UserViewProps> = ({ userId, records, items, boxes }) =>
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100 mb-8 overflow-x-auto gap-6">
         <TabItem label={`กำลังยืม (${borrowing.length})`} active={activeTab === 'borrowing'} onClick={() => setActiveTab('borrowing')} />
         <TabItem label={`รอตรวจคืน (${pendingReturn.length})`} active={activeTab === 'pendingReturn'} onClick={() => setActiveTab('pendingReturn')} />
         <TabItem label={`คืนแล้ว (${returned.length})`} active={activeTab === 'returned'} onClick={() => setActiveTab('returned')} />
@@ -49,8 +49,8 @@ const UserView: React.FC<UserViewProps> = ({ userId, records, items, boxes }) =>
 const TabItem: React.FC<{ label: string, active: boolean, onClick: () => void }> = ({ label, active, onClick }) => (
   <button 
     onClick={onClick}
-    className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
-      active ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-800'
+    className={`px-4 py-3 font-bold text-sm transition-all border-b-2 whitespace-nowrap ${
+      active ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-gray-600'
     }`}
   >
     {label}
@@ -101,8 +101,8 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
   const [returnProofFile, setReturnProofFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Checkbox Style matching Admin (Orange Theme)
-  const orangeCheckboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-[#FED7AA] checked:border-[#FB923C] relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-[#FB923C] focus:outline-none focus:ring-2 focus:ring-[#FB923C] focus:ring-offset-1";
+  // Checkbox Style matching new theme (Yellow/Secondary)
+  const checkboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-secondary checked:border-secondary-dark relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1";
 
   // Group by Box
   const groupedByBox: { [key: string]: Record[] } = {};
@@ -206,30 +206,28 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
         }, [] as { name: string; count: number }[]);
 
         return (
-          <div key={boxId} className={`bg-white p-6 rounded-xl shadow-sm border flex flex-col transition-colors ${isOverdue ? 'border-red-200 bg-red-50/10' : 'border-gray-200 hover:border-pink-200'}`}>
-            <div className="flex items-start justify-between mb-2">
+          <div key={boxId} className={`bg-white p-6 rounded-2xl shadow-card border flex flex-col transition-all hover:shadow-soft ${isOverdue ? 'border-red-200 bg-red-50/20' : 'border-gray-100 hover:border-blue-200'}`}>
+            <div className="flex items-start justify-between mb-3">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">{box?.boxName || 'Unknown Box'}</h3>
-                <p className="text-sm text-gray-600">{box?.boxType}</p>
+                <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{box?.boxName || 'Unknown Box'}</h3>
+                <p className="text-sm text-gray-500 font-medium">{box?.boxType}</p>
               </div>
-              <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+              <div className="bg-bg text-primary-dark px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border border-blue-100">
                 {boxRecords.length} รายการ
               </div>
             </div>
 
             {/* Status and Due Date Info */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800`}>
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+                 <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700`}>
                     {getUserStatusLabel('borrowing')}
                  </span>
-                 <span className={`text-xs font-medium flex items-center gap-1 ${isOverdue ? 'text-red-600' : 'text-gray-500'}`}>
+                 <span className={`text-xs font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500 bg-red-50 px-2 py-1 rounded-lg' : 'text-gray-400'}`}>
+                    {isOverdue && <AlertCircle size={14} />}
                     {dueText}
                     {isNearDue && !rejectionNote && (
                         <div className="group relative">
-                            <Bell size={14} className="text-orange-500 animate-pulse" />
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                                ระบบจะส่งการแจ้งเตือนให้คุณล่วงหน้า 1 วันก่อนครบกำหนด
-                            </div>
+                            <Bell size={14} className="text-secondary fill-secondary animate-pulse" />
                         </div>
                     )}
                  </span>
@@ -237,27 +235,30 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
             
             {/* Show Rejection Note if exists */}
             {rejectionNote && (
-                 <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-sm">
+                 <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-xl text-sm">
                      <div className="flex items-center gap-2 mb-1">
                          <AlertCircle size={16} className="text-red-600" />
                          <p className="font-bold text-red-700">คำขอคืนล่าสุดไม่ได้รับการอนุมัติ</p>
                      </div>
-                     <p className="text-red-600 ml-6">"{rejectionNote}"</p>
-                     <p className="text-xs text-red-500 mt-2 ml-6">กรุณากด "ขอคืนของ" อีกครั้งพร้อมแก้ไขหลักฐาน</p>
+                     <p className="text-red-600 ml-6 italic">"{rejectionNote}"</p>
                  </div>
             )}
             
-            <ul className="space-y-2 mb-6 flex-grow">
+            <div className="space-y-2 mb-6 flex-grow">
               {groupedItemsForCard.map((g, idx) => (
-                <li key={idx} className="flex items-center text-sm text-gray-700">
-                  <div className="w-2 h-2 rounded-full bg-primary mr-2"></div>
-                  {g.name} 
-                  {g.count > 1 && <span className="ml-1 text-gray-500 text-xs">(x{g.count} รายการ)</span>}
-                </li>
+                <div key={idx} className="flex items-center text-sm text-gray-700 bg-gray-50/50 p-2 rounded-lg">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary mr-3 ml-1"></div>
+                  <span className="font-medium">{g.name}</span>
+                  {g.count > 1 && <span className="ml-2 text-primary text-xs font-bold bg-blue-50 px-1.5 rounded">x{g.count}</span>}
+                </div>
               ))}
-            </ul>
+            </div>
 
-            <Button onClick={() => handleReturnClick(boxId)} variant="primary" className="w-full">
+            <Button 
+                onClick={() => handleReturnClick(boxId)} 
+                variant="primary" 
+                className="w-full shadow-lg shadow-blue-200"
+            >
               {rejectionNote ? "ขอคืนอีกครั้ง" : "ขอคืนของ"}
             </Button>
           </div>
@@ -268,6 +269,7 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
         isOpen={returnModalOpen} 
         onClose={() => setReturnModalOpen(false)} 
         title="คืนของ"
+        maxWidth="max-w-2xl"
         footer={
             <div className="w-full">
                 <Button 
@@ -278,35 +280,38 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
                   ยืนยันการขอคืน ({selectedRecordIds.size} รายการ)
                 </Button>
                 {!isReturnValid && (
-                    <p className="text-xs text-danger text-center mt-2 animate-pulse">
-                       * กรุณาเช็ครายการสิ่งของที่ต้องการคืน และอัปโหลดรูปหลักฐานก่อน
+                    <p className="text-xs text-danger text-center mt-3 font-medium animate-pulse">
+                       * กรุณาเช็ครายการสิ่งของและอัปโหลดรูปหลักฐานก่อน
                     </p>
                 )}
             </div>
         }
       >
         {selectedBoxId && groupedByBox[selectedBoxId] && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div>
-                <p className="text-sm font-bold text-gray-900 mb-3">เช็ครายการสิ่งของที่ต้องการคืน:</p>
-                <div className="space-y-2 border border-gray-200 rounded-lg p-3 max-h-60 overflow-y-auto bg-gray-50/50">
+                <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-bold text-gray-900">เช็ครายการสิ่งของที่ต้องการคืน:</p>
+                    <p className="text-xs text-gray-500">เลือกรายการที่พร้อมคืน</p>
+                </div>
+                <div className="space-y-2 border border-gray-100 rounded-2xl p-4 max-h-64 overflow-y-auto bg-gray-50">
                 {/* Logic to render grouped items */}
                 {getGroupedReturnItems(groupedByBox[selectedBoxId]).map(group => {
                     const isAllSelected = group.recordIds.every(id => selectedRecordIds.has(id));
                     
                     return (
-                        <label key={group.name} className="flex items-center space-x-3 p-2 hover:bg-white hover:shadow-sm rounded transition-all cursor-pointer">
+                        <label key={group.name} className="flex items-center space-x-3 p-3 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-secondary transition-all cursor-pointer">
                             <input 
                                 type="checkbox" 
-                                className={orangeCheckboxClass}
+                                className={checkboxClass}
                                 checked={isAllSelected}
                                 onChange={() => toggleGroupSelect(group.recordIds)}
                             />
                             <div className="flex items-center space-x-3 flex-1">
-                                <img src={group.imageUrl} className="w-10 h-10 object-cover rounded" alt="" />
+                                <img src={group.imageUrl} className="w-10 h-10 object-cover rounded-lg bg-gray-100" alt="" />
                                 <div>
-                                    <p className="text-gray-900 text-sm font-medium">{group.name}</p>
-                                    <p className="text-gray-500 text-xs">จำนวน {group.count} รายการ</p>
+                                    <p className="text-gray-900 text-sm font-bold">{group.name}</p>
+                                    <p className="text-gray-500 text-xs font-medium">จำนวน {group.count} รายการ</p>
                                 </div>
                             </div>
                         </label>
@@ -328,28 +333,28 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
               {!returnProofFile ? (
                 <div 
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 hover:border-primary/50 transition-all cursor-pointer group"
+                    className="border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center justify-center bg-white hover:bg-blue-50/30 hover:border-primary/50 transition-all cursor-pointer group"
                 >
-                    <div className="p-3 bg-white rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
-                        <Upload className="w-6 h-6 text-primary" />
+                    <div className="p-4 bg-blue-50 text-primary rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                        <Upload className="w-6 h-6" />
                     </div>
-                    <p className="text-gray-800 font-medium text-sm">คลิกเพื่ออัปโหลดรูปภาพ</p>
+                    <p className="text-gray-800 font-bold text-sm">คลิกเพื่ออัปโหลดรูปภาพ</p>
                     <p className="text-xs text-gray-500 mt-1">รองรับไฟล์ JPG, PNG</p>
                 </div>
               ) : (
-                <div className="border border-green-200 bg-green-50 rounded-lg p-4 flex items-center justify-between">
+                <div className="border border-green-200 bg-green-50 rounded-2xl p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 rounded-lg text-green-600">
+                        <div className="p-2.5 bg-green-100 rounded-xl text-green-600">
                             <FileText className="w-5 h-5" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-green-800 truncate max-w-[200px]">{returnProofFile.name}</p>
-                            <p className="text-xs text-green-600">{(returnProofFile.size / 1024).toFixed(1)} KB</p>
+                            <p className="text-sm font-bold text-green-800 truncate max-w-[200px]">{returnProofFile.name}</p>
+                            <p className="text-xs text-green-600 font-medium">{(returnProofFile.size / 1024).toFixed(1)} KB</p>
                         </div>
                     </div>
                     <button 
                         onClick={handleRemoveFile}
-                        className="p-1 hover:bg-green-100 rounded-full text-green-700 transition-colors"
+                        className="p-1.5 hover:bg-green-100 rounded-full text-green-700 transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -374,7 +379,6 @@ const StatusList: React.FC<StatusListProps> = ({ records, items, type }) => {
   if (records.length === 0) return <EmptyState message={type === 'pendingReturn' ? "ไม่มีรายการรออนุมัติ" : "ไม่มีประวัติการคืน"} />;
 
   // GROUPING LOGIC
-  // Combine records that have the same Item Name and the same Status/Date
   
   type GroupedItem = { 
     recordId: string, 
@@ -418,30 +422,37 @@ const StatusList: React.FC<StatusListProps> = ({ records, items, type }) => {
         return (
           <div 
             key={group.recordId} 
-            className={`bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between`}
+            className={`bg-white p-5 rounded-2xl shadow-card border border-gray-100 flex items-center justify-between hover:border-primary/20 transition-all`}
           >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5">
                 <div className="relative">
-                    <img src={group.imageUrl} className="w-16 h-16 rounded-lg object-cover bg-gray-200" alt="" />
+                    <img src={group.imageUrl} className="w-16 h-16 rounded-xl object-cover bg-gray-100 border border-gray-100" alt="" />
+                    {group.count > 1 && (
+                        <div className="absolute -top-2 -right-2 bg-secondary text-slate-900 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                            {group.count}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                    <h4 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
                         {group.name}
-                        {group.count > 1 && <span className="text-xs font-normal text-gray-500">(จำนวน {group.count} รายการ)</span>}
                     </h4>
-                    <p className="text-xs text-gray-600 mt-1">
-                        {type === 'pendingReturn'
-                            ? `ขอคืนเมื่อ: ${group.dateLabel}` 
-                            : `คืนสำเร็จเมื่อ: ${group.dateLabel}`
-                        }
-                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                        <CalendarClock size={14} />
+                        <span>
+                            {type === 'pendingReturn'
+                                ? `ขอคืนเมื่อ: ${group.dateLabel}` 
+                                : `คืนสำเร็จเมื่อ: ${group.dateLabel}`
+                            }
+                        </span>
+                    </div>
                 </div>
             </div>
             <div className="flex flex-col items-end gap-2">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
                     type === 'returned' 
-                    ? 'bg-green-100 text-green-800 border-green-200' 
-                    : 'bg-orange-100 text-orange-800 border-orange-200'
+                    ? 'bg-gray-100 text-gray-600 border-gray-200' 
+                    : 'bg-secondary/20 text-yellow-800 border-yellow-200'
                 }`}>
                     {statusLabel}
                 </span>
@@ -454,9 +465,11 @@ const StatusList: React.FC<StatusListProps> = ({ records, items, type }) => {
 };
 
 const EmptyState = ({ message }: { message: string }) => (
-  <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-    <Package className="w-12 h-12 mb-2 opacity-50" />
-    <p className="text-gray-500 font-medium">{message}</p>
+  <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-white rounded-3xl border border-dashed border-gray-200">
+    <div className="bg-gray-50 p-4 rounded-full mb-4">
+        <Package className="w-10 h-10 text-gray-300" />
+    </div>
+    <p className="text-gray-500 font-bold">{message}</p>
   </div>
 );
 
