@@ -488,17 +488,17 @@ export default function App() {
                 </div>
             </div>
             <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-primary transition-colors line-clamp-1">{box.boxName}</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary transition-colors line-clamp-1">{box.boxName}</h3>
               
-              <div className="mb-6 mt-3">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                      <span className="text-gray-600 font-medium">ของทั้งหมด {box.itemCount} รายการ</span>
-                      <span className="text-gray-300 hidden sm:inline">|</span>
+              <div className="mb-6 mt-2">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-gray-600">ของทั้งหมด {box.itemCount} รายการ</span>
+                      <span className="text-gray-300">-</span>
                       <span className="text-green-600 font-bold">พร้อม {box.availableCount} รายการ</span>
                   </div>
                   {box.itemCount > box.availableCount && (
-                      <p className="text-xs text-gray-400 mt-1.5 font-medium flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+                      <p className="text-xs text-gray-400 mt-1.5 font-medium flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
                           กำลังถูกยืม {box.itemCount - box.availableCount} รายการ
                       </p>
                   )}
