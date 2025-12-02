@@ -33,6 +33,25 @@ supabase.channel('public:all')
   })
   .subscribe();
 
+// --- HELPER: CONNECTION CHECK ---
+export const checkConnection = async (): Promise<boolean> => {
+    try {
+        // Try to fetch a small piece of data to verify connectivity
+        const { error } = await supabase.from('boxes').select('box_id', { count: 'exact', head: true });
+        
+        // If error is null, connection is good. 
+        // If error is 401/403, Key is wrong. 
+        // If error is Network, connection is bad.
+        if (error) {
+            console.error('Connection Check Failed:', error.message);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error('Connection Exception:', e);
+        return false;
+    }
+};
 
 // --- HELPER: FILE UPLOAD ---
 
@@ -543,7 +562,7 @@ export const createBox = async (name: string, type: string, coverUrl: string, ne
     if (boxError) {
         // Handle specific missing table error to help user
         if (boxError.code === '42P01' || boxError.code === 'PGRST205') {
-            const msg = 'Missing table "boxes" in Supabase. Please run the SQL script.');
+            const msg = 'Missing table "boxes" in Supabase. Please run the SQL script.';
             console.error('Create Box Error:', msg);
             return { success: false, error: msg };
         }

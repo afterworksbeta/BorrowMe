@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useState, useRef } from 'react';
 import * as DB from './services/db';
 import { User, PopulatedBox, Item, Record, PendingBorrowAction, AdminNotification } from './types';
@@ -56,27 +54,43 @@ export default function App() {
   // Initialization & "Realtime" Subscription
   useEffect(() => {
     const fetchData = async () => {
-      // Parallel fetch for efficiency
-      const [fetchedBoxes, fetchedItems, fetchedRecords, fetchedUser, fetchedNotifs] = await Promise.all([
-        DB.getBoxes(),
-        DB.getItems(),
-        DB.getRecords(),
-        DB.getCurrentUser(),
-        DB.getAdminNotifications()
-      ]);
+      try {
+          // Check API Connection First
+          const isConnected = await DB.checkConnection();
+          if (!isConnected) {
+              console.warn("Database Connection Failed");
+              showToast("⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (API Key อาจผิด)");
+          } else {
+              // Only check this if connected, to be helpful
+              // showToast("✅ เชื่อมต่อฐานข้อมูลสำเร็จ");
+          }
 
-      // Filter out orphan records (records pointing to boxes that no longer exist)
-      // This solves the issue of "Unknown Box" appearing after admin deletion
-      const validRecords = fetchedRecords.filter(r => 
-        fetchedBoxes.some(b => b.boxId === r.boxId)
-      );
+          // Parallel fetch for efficiency
+          const [fetchedBoxes, fetchedItems, fetchedRecords, fetchedUser, fetchedNotifs] = await Promise.all([
+            DB.getBoxes(),
+            DB.getItems(),
+            DB.getRecords(),
+            DB.getCurrentUser(),
+            DB.getAdminNotifications()
+          ]);
 
-      setBoxes(fetchedBoxes);
-      setItems(fetchedItems);
-      setRecords(validRecords);
-      setCurrentUser(fetchedUser);
-      setAdminNotifications(fetchedNotifs); 
-      setIsLoading(false);
+          // Filter out orphan records (records pointing to boxes that no longer exist)
+          // This solves the issue of "Unknown Box" appearing after admin deletion
+          const validRecords = fetchedRecords.filter(r => 
+            fetchedBoxes.some(b => b.boxId === r.boxId)
+          );
+
+          setBoxes(fetchedBoxes);
+          setItems(fetchedItems);
+          setRecords(validRecords);
+          setCurrentUser(fetchedUser);
+          setAdminNotifications(fetchedNotifs); 
+      } catch (err) {
+          console.error("Critical Error during initialization:", err);
+          showToast("❌ เกิดข้อผิดพลาดร้ายแรงในการโหลดข้อมูล");
+      } finally {
+          setIsLoading(false);
+      }
     };
 
     fetchData();
@@ -605,9 +619,9 @@ export default function App() {
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom-5">
-          <div className="bg-slate-800 text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-700">
-            <div className="bg-green-500 rounded-full p-1 text-white">
-                <CheckCircle2 size={16} />
+          <div className={`text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border ${toastMessage.includes('❌') || toastMessage.includes('⚠️') ? 'bg-red-800 border-red-700' : 'bg-slate-800 border-slate-700'}`}>
+            <div className={`rounded-full p-1 text-white ${toastMessage.includes('❌') || toastMessage.includes('⚠️') ? 'bg-red-500' : 'bg-green-500'}`}>
+                {toastMessage.includes('❌') || toastMessage.includes('⚠️') ? <X size={16} /> : <CheckCircle2 size={16} />}
             </div>
             <span className="font-bold text-sm">{toastMessage}</span>
           </div>
