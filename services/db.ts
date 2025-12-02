@@ -26,30 +26,48 @@ export const subscribe = (listener: Listener) => {
 };
 
 // Initialize Realtime Subscription
-supabase.channel('public:all')
-  .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-    console.log('Realtime update received');
-    notify();
-  })
-  .subscribe();
+try {
+    supabase.channel('public:all')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        console.log('Realtime update received');
+        notify();
+      })
+      .subscribe();
+} catch (e) {
+    console.error("Realtime subscription failed:", e);
+}
 
 // --- HELPER: CONNECTION CHECK ---
-export const checkConnection = async (): Promise<boolean> => {
+export const checkConnection = async (): Promise<{ success: boolean; message?: string; details?: string }> => {
     try {
         // Try to fetch a small piece of data to verify connectivity
+        // Using 'head: true' to minimize data transfer
         const { error } = await supabase.from('boxes').select('box_id', { count: 'exact', head: true });
         
-        // If error is null, connection is good. 
-        // If error is 401/403, Key is wrong. 
-        // If error is Network, connection is bad.
         if (error) {
-            console.error('Connection Check Failed:', error.message);
-            return false;
+            console.error('Connection Check Failed:', error);
+            
+            // Analyze Error Code
+            if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+                return { success: false, message: 'API Key ไม่ถูกต้อง หรือหมดอายุ', details: error.message };
+            }
+            if (error.code === '42P01') {
+                return { success: false, message: 'ไม่พบตารางในฐานข้อมูล (ยังไม่ได้รัน SQL Setup)', details: error.message };
+            }
+            if (error.code === '42501') {
+                return { success: false, message: 'เชื่อมต่อได้ แต่ไม่มีสิทธิ์อ่านข้อมูล (ติด RLS Policy)', details: error.message };
+            }
+            if (error.message?.includes('Failed to fetch') || error.message?.includes('Network request failed')) {
+                return { success: false, message: 'ไม่สามารถติดต่อ Server ได้ (Network Error)', details: 'ตรวจสอบอินเทอร์เน็ต หรือ API Key อาจผิด' };
+            }
+            
+            return { success: false, message: `เกิดข้อผิดพลาด: ${error.message}`, details: error.code };
         }
-        return true;
-    } catch (e) {
+        
+        return { success: true };
+    } catch (e: any) {
         console.error('Connection Exception:', e);
-        return false;
+        return { success: false, message: 'Client Error (Javascript)', details: e.message };
     }
 };
 

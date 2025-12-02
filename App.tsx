@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { Component, useEffect, useState, useRef } from 'react';
 import * as DB from './services/db';
 import { User, PopulatedBox, Item, Record, PendingBorrowAction, AdminNotification } from './types';
 import { Button, Modal, Badge, LoadingScreen, NotificationBell, NotificationItem, useNotifications, NotificationType } from './components/Common';
@@ -6,7 +6,56 @@ import AuthModal from './components/AuthModal';
 import SettingsModal from './components/SettingsModal';
 import UserView from './views/UserView';
 import AdminDashboard from './views/AdminDashboard';
-import { LogOut, Package, User as UserIcon, Box as BoxIcon, CheckCircle2, Upload, FileText, X, CalendarClock } from 'lucide-react';
+import { LogOut, Package, User as UserIcon, Box as BoxIcon, CheckCircle2, Upload, FileText, X, CalendarClock, AlertTriangle, RefreshCw, WifiOff } from 'lucide-react';
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: string;
+}
+
+// Error Boundary Component to catch rendering errors and prevent white screens
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: '' };
+
+  static getDerivedStateFromError(error: any): ErrorBoundaryState {
+    return { hasError: true, error: error.toString() };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-red-50 text-red-900 font-sans">
+          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full text-center border border-red-100">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+               <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-2xl font-bold mb-2 text-red-600">เกิดข้อผิดพลาด (Application Error)</h2>
+            <p className="text-gray-600 mb-6">ระบบพบปัญหาในการทำงาน ทำให้หน้าจอแสดงผลไม่ได้</p>
+            <p className="text-xs bg-gray-100 p-4 rounded-xl font-mono mb-6 text-left overflow-auto max-h-40 border border-gray-200 text-gray-700">
+              {this.state.error}
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors flex items-center justify-center w-full gap-2 shadow-lg shadow-red-200"
+            >
+              <RefreshCw size={18} /> โหลดหน้าเว็บใหม่
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export default function App() {
   // Global State
@@ -15,7 +64,10 @@ export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [records, setRecords] = useState<Record[]>([]);
   const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>([]);
+  
+  // Loading & Connection State
   const [isLoading, setIsLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<{ success: boolean; message?: string; details?: string } | null>(null);
 
   // Notification Hook
   const { notifications, unreadCount, markAsRead, markAllAsRead, addNotification, removeNotification, removeNotificationsByRecordId, setAllNotifications, clearAllNotifications } = useNotifications();
@@ -53,19 +105,18 @@ export default function App() {
 
   // Initialization & "Realtime" Subscription
   useEffect(() => {
-    const fetchData = async () => {
+    const initApp = async () => {
       try {
-          // Check API Connection First
-          const isConnected = await DB.checkConnection();
-          if (!isConnected) {
-              console.warn("Database Connection Failed");
-              showToast("⚠️ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (API Key อาจผิด)");
-          } else {
-              // Only check this if connected, to be helpful
-              // showToast("✅ เชื่อมต่อฐานข้อมูลสำเร็จ");
+          // 1. Connection Check (Crucial step to prevent white screen)
+          const connResult = await DB.checkConnection();
+          
+          if (!connResult.success) {
+              setConnectionStatus(connResult);
+              setIsLoading(false);
+              return; // Stop loading if connection failed
           }
 
-          // Parallel fetch for efficiency
+          // 2. Parallel fetch for efficiency
           const [fetchedBoxes, fetchedItems, fetchedRecords, fetchedUser, fetchedNotifs] = await Promise.all([
             DB.getBoxes(),
             DB.getItems(),
@@ -85,21 +136,23 @@ export default function App() {
           setRecords(validRecords);
           setCurrentUser(fetchedUser);
           setAdminNotifications(fetchedNotifs); 
+          
       } catch (err) {
           console.error("Critical Error during initialization:", err);
           showToast("❌ เกิดข้อผิดพลาดร้ายแรงในการโหลดข้อมูล");
+          setConnectionStatus({ success: false, message: "Application Crash", details: String(err) });
       } finally {
           setIsLoading(false);
       }
     };
 
-    fetchData();
+    initApp();
     
     // Simulate Daily Job: Check for notifications
     DB.checkAndNotifyDueSoon();
 
     const unsubscribe = DB.subscribe(() => {
-      fetchData();
+      initApp();
     });
 
     return () => unsubscribe();
@@ -610,285 +663,322 @@ export default function App() {
     </div>
   ) : null;
 
+  // Render Connection Error Screen
+  if (connectionStatus && !connectionStatus.success) {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 font-sans">
+              <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full text-center border border-gray-100">
+                  <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <WifiOff size={32} />
+                  </div>
+                  <h2 className="text-2xl font-bold mb-2 text-gray-900">ไม่สามารถเชื่อมต่อฐานข้อมูล</h2>
+                  <p className="text-gray-600 mb-6 font-medium">พบปัญหาในการติดต่อกับ API กรุณาตรวจสอบ</p>
+                  
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6 text-left">
+                      <p className="text-xs font-bold text-red-800 uppercase mb-1">สาเหตุที่พบ:</p>
+                      <p className="text-sm font-bold text-red-600 mb-2">{connectionStatus.message}</p>
+                      {connectionStatus.details && (
+                          <div className="text-xs text-red-500 font-mono bg-red-100/50 p-2 rounded break-all">
+                              {connectionStatus.details}
+                          </div>
+                      )}
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="flex-1 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover transition-colors shadow-lg shadow-blue-200"
+                      >
+                        ลองใหม่ (Reload)
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   if (isLoading) return <LoadingScreen />;
 
+  // Wrapped in ErrorBoundary to prevent White Screen on render errors
   return (
-    <div className="min-h-screen pb-10 bg-bg font-sans selection:bg-secondary/30 selection:text-primary-dark">
-      {renderHeader()}
-      
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom-5">
-          <div className={`text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border ${toastMessage.includes('❌') || toastMessage.includes('⚠️') ? 'bg-red-800 border-red-700' : 'bg-slate-800 border-slate-700'}`}>
-            <div className={`rounded-full p-1 text-white ${toastMessage.includes('❌') || toastMessage.includes('⚠️') ? 'bg-red-500' : 'bg-green-500'}`}>
-                {toastMessage.includes('❌') || toastMessage.includes('⚠️') ? <X size={16} /> : <CheckCircle2 size={16} />}
-            </div>
-            <span className="font-bold text-sm">{toastMessage}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Sub Navigation */}
-      {view === 'user' && currentUser && (
-           <div className="bg-white border-b border-gray-100 transition-colors shadow-sm relative z-30">
-                <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <Package className="text-secondary" /> จัดการรายการยืม-คืน
-                     </h2>
-                     <Button variant="outline" size="sm" onClick={() => setView('home')} className="rounded-lg border-gray-200 text-gray-600">ไปหน้าแรก</Button>
+    <ErrorBoundary>
+        <div className="min-h-screen pb-10 bg-bg font-sans selection:bg-secondary/30 selection:text-primary-dark">
+        {renderHeader()}
+        
+        {/* Toast Notification */}
+        {toastMessage && (
+            <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom-5">
+            <div className={`text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border ${toastMessage.includes('❌') || toastMessage.includes('⚠️') ? 'bg-red-800 border-red-700' : 'bg-slate-800 border-slate-700'}`}>
+                <div className={`rounded-full p-1 text-white ${toastMessage.includes('❌') || toastMessage.includes('⚠️') ? 'bg-red-500' : 'bg-green-500'}`}>
+                    {toastMessage.includes('❌') || toastMessage.includes('⚠️') ? <X size={16} /> : <CheckCircle2 size={16} />}
                 </div>
-           </div>
-      )}
-
-      {/* Main Content */}
-      <main className="animate-in fade-in duration-500 slide-in-from-bottom-2">
-        {view === 'home' && <HomeView />}
-        {view === 'user' && currentUser && (
-            <UserView userId={currentUser.userId} records={records} items={items} boxes={boxes} />
+                <span className="font-bold text-sm">{toastMessage}</span>
+            </div>
+            </div>
         )}
-        {view === 'admin' && currentUser?.role === 'admin' && (
-            <AdminDashboard 
-                boxes={boxes} 
-                records={records} 
-                items={items} 
-                initialTab={adminInitialTab}
-                navigationTick={navigationTick}
-                onDeleteRecords={handleDeleteRecords}
+
+        {/* Sub Navigation */}
+        {view === 'user' && currentUser && (
+            <div className="bg-white border-b border-gray-100 transition-colors shadow-sm relative z-30">
+                    <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <Package className="text-secondary" /> จัดการรายการยืม-คืน
+                        </h2>
+                        <Button variant="outline" size="sm" onClick={() => setView('home')} className="rounded-lg border-gray-200 text-gray-600">ไปหน้าแรก</Button>
+                    </div>
+            </div>
+        )}
+
+        {/* Main Content */}
+        <main className="animate-in fade-in duration-500 slide-in-from-bottom-2">
+            {view === 'home' && <HomeView />}
+            {view === 'user' && currentUser && (
+                <UserView userId={currentUser.userId} records={records} items={items} boxes={boxes} />
+            )}
+            {view === 'admin' && currentUser?.role === 'admin' && (
+                <AdminDashboard 
+                    boxes={boxes} 
+                    records={records} 
+                    items={items} 
+                    initialTab={adminInitialTab}
+                    navigationTick={navigationTick}
+                    onDeleteRecords={handleDeleteRecords}
+                />
+            )}
+        </main>
+
+        {/* Auth Modal */}
+        <AuthModal 
+            isOpen={authModalOpen} 
+            onClose={() => setAuthModalOpen(false)} 
+            onSuccess={handleLoginSuccess} 
+        />
+
+        {/* Settings Modal */}
+        {currentUser && (
+            <SettingsModal 
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                currentUser={currentUser}
+                initialTab={settingsInitialTab}
+                onLogout={handleLogout}
             />
         )}
-      </main>
 
-      {/* Auth Modal */}
-      <AuthModal 
-        isOpen={authModalOpen} 
-        onClose={() => setAuthModalOpen(false)} 
-        onSuccess={handleLoginSuccess} 
-      />
-
-      {/* Settings Modal */}
-      {currentUser && (
-          <SettingsModal 
-              isOpen={isSettingsOpen}
-              onClose={() => setIsSettingsOpen(false)}
-              currentUser={currentUser}
-              initialTab={settingsInitialTab}
-              onLogout={handleLogout}
-          />
-      )}
-
-      {/* Box Detail Modal */}
-      <Modal 
-        isOpen={!!selectedBox} 
-        onClose={() => setSelectedBox(null)} 
-        title={selectedBox?.boxName || ''}
-        maxWidth="max-w-2xl"
-        footer={boxDetailFooter}
-      >
-        {selectedBox && (
-          <div className="flex flex-col h-full">
-             <div className="mb-6 flex items-center gap-3 bg-blue-50 p-3 rounded-xl">
-                 <div className="p-2 bg-white rounded-lg shadow-sm">
-                    <Package size={20} className="text-primary" />
-                 </div>
-                 <div>
-                    <p className="text-xs text-gray-500 font-bold uppercase">ประเภทกล่อง</p>
-                    <p className="font-bold text-gray-900">{selectedBox.boxType}</p>
-                 </div>
-             </div>
-             
-             <div className="space-y-3">
-                 <h4 className="font-bold text-gray-900 mb-2">สิ่งของภายในกล่อง</h4>
-                 {/* Group items by name to avoid duplicates in list */}
-                 {groupItemsByName(items.filter(i => i.boxId === selectedBox.boxId)).map((group, idx) => (
-                     <div key={idx} className="flex items-center justify-between p-3 border border-gray-100 bg-white rounded-xl hover:shadow-sm hover:border-blue-100 transition-all">
-                         <div className="flex items-center gap-4">
-                             <img src={group.img} className="w-12 h-12 rounded-lg object-cover bg-gray-100" alt={group.name} />
-                             <div>
-                                 <h4 className="font-bold text-gray-900 text-sm">{group.name}</h4>
-                                 <div className="flex gap-2 text-xs mt-0.5">
-                                     <span className="text-gray-500 font-medium">จำนวนทั้งหมด {group.count} รายการ</span>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                 ))}
-             </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Borrow Confirmation Modal */}
-      <Modal
-        isOpen={borrowModalOpen}
-        onClose={() => setBorrowModalOpen(false)}
-        title="ยืนยันการยืม"
-        maxWidth="max-w-2xl"
-        footer={borrowFooter}
-      >
-        {borrowTargetBox && (
-            <div className="space-y-8">
-                {/* 1. Item List */}
-                <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-bold text-gray-900">เช็ครายการสิ่งของในกล่องนี้</h4>
-                        <Badge status="available" />
+        {/* Box Detail Modal */}
+        <Modal 
+            isOpen={!!selectedBox} 
+            onClose={() => setSelectedBox(null)} 
+            title={selectedBox?.boxName || ''}
+            maxWidth="max-w-2xl"
+            footer={boxDetailFooter}
+        >
+            {selectedBox && (
+            <div className="flex flex-col h-full">
+                <div className="mb-6 flex items-center gap-3 bg-blue-50 p-3 rounded-xl">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                        <Package size={20} className="text-primary" />
                     </div>
-                    <div className="space-y-2 border border-gray-100 rounded-2xl p-4 max-h-56 overflow-y-auto bg-gray-50">
-                        {/* Group items by name to show checklist summary */}
-                        {groupItemsByName(items.filter(i => i.boxId === borrowTargetBox.boxId && i.itemStatus === 'available')).map((group, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-2.5 bg-white rounded-xl shadow-sm border border-gray-100 justify-between">
-                                <div className="flex items-center gap-3">
-                                    <img src={group.img} className="w-10 h-10 object-cover rounded-lg bg-gray-100" alt="" />
-                                    <span className="text-gray-900 text-sm font-bold">{group.name}</span>
+                    <div>
+                        <p className="text-xs text-gray-500 font-bold uppercase">ประเภทกล่อง</p>
+                        <p className="font-bold text-gray-900">{selectedBox.boxType}</p>
+                    </div>
+                </div>
+                
+                <div className="space-y-3">
+                    <h4 className="font-bold text-gray-900 mb-2">สิ่งของภายในกล่อง</h4>
+                    {/* Group items by name to avoid duplicates in list */}
+                    {groupItemsByName(items.filter(i => i.boxId === selectedBox.boxId)).map((group, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 border border-gray-100 bg-white rounded-xl hover:shadow-sm hover:border-blue-100 transition-all">
+                            <div className="flex items-center gap-4">
+                                <img src={group.img} className="w-12 h-12 rounded-lg object-cover bg-gray-100" alt={group.name} />
+                                <div>
+                                    <h4 className="font-bold text-gray-900 text-sm">{group.name}</h4>
+                                    <div className="flex gap-2 text-xs mt-0.5">
+                                        <span className="text-gray-500 font-medium">จำนวนทั้งหมด {group.count} รายการ</span>
+                                    </div>
                                 </div>
-                                <span className="text-xs bg-secondary/10 text-slate-800 font-bold px-2.5 py-1 rounded-lg border border-secondary/20">
-                                    x{group.count}
-                                </span>
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* 2. Checkbox Confirmation */}
-                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            className={checkboxClass}
-                            checked={hasCheckedItems}
-                            onChange={(e) => setHasCheckedItems(e.target.checked)}
-                        />
-                        <span className="text-gray-800 text-sm font-bold">ฉันได้ตรวจสอบรายการสิ่งของในกล่องนี้แล้ว</span>
-                    </label>
-                </div>
-
-                {/* 3. Upload Proof */}
-                <div>
-                  <p className="text-sm font-bold text-gray-900 mb-2">รูปภาพกล่อง/สิ่งของที่ยืม</p>
-                  <input 
-                    type="file" 
-                    ref={borrowFileInputRef} 
-                    className="hidden" 
-                    accept="image/png, image/jpeg"
-                    onChange={handleBorrowFileChange}
-                  />
-                  
-                  {!borrowProofFile ? (
-                    <div 
-                        onClick={() => borrowFileInputRef.current?.click()}
-                        className="border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center justify-center bg-white hover:bg-blue-50/30 hover:border-primary/50 transition-all cursor-pointer group"
-                    >
-                        <div className="p-4 bg-blue-50 text-primary rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
-                            <Upload className="w-6 h-6" />
                         </div>
-                        <p className="text-gray-800 font-bold text-sm">อัปโหลดรูปกล่อง/สิ่งของที่ยืม</p>
-                        <p className="text-xs text-gray-500 mt-1">เพื่อใช้ประกอบการยืนยัน (JPG, PNG)</p>
+                    ))}
+                </div>
+            </div>
+            )}
+        </Modal>
+
+        {/* Borrow Confirmation Modal */}
+        <Modal
+            isOpen={borrowModalOpen}
+            onClose={() => setBorrowModalOpen(false)}
+            title="ยืนยันการยืม"
+            maxWidth="max-w-2xl"
+            footer={borrowFooter}
+        >
+            {borrowTargetBox && (
+                <div className="space-y-8">
+                    {/* 1. Item List */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-bold text-gray-900">เช็ครายการสิ่งของในกล่องนี้</h4>
+                            <Badge status="available" />
+                        </div>
+                        <div className="space-y-2 border border-gray-100 rounded-2xl p-4 max-h-56 overflow-y-auto bg-gray-50">
+                            {/* Group items by name to show checklist summary */}
+                            {groupItemsByName(items.filter(i => i.boxId === borrowTargetBox.boxId && i.itemStatus === 'available')).map((group, idx) => (
+                                <div key={idx} className="flex items-center gap-3 p-2.5 bg-white rounded-xl shadow-sm border border-gray-100 justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <img src={group.img} className="w-10 h-10 object-cover rounded-lg bg-gray-100" alt="" />
+                                        <span className="text-gray-900 text-sm font-bold">{group.name}</span>
+                                    </div>
+                                    <span className="text-xs bg-secondary/10 text-slate-800 font-bold px-2.5 py-1 rounded-lg border border-secondary/20">
+                                        x{group.count}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                  ) : (
-                    <div className="border border-green-200 bg-green-50 rounded-2xl p-4 flex items-center justify-between">
+
+                    {/* 2. Checkbox Confirmation */}
+                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                className={checkboxClass}
+                                checked={hasCheckedItems}
+                                onChange={(e) => setHasCheckedItems(e.target.checked)}
+                            />
+                            <span className="text-gray-800 text-sm font-bold">ฉันได้ตรวจสอบรายการสิ่งของในกล่องนี้แล้ว</span>
+                        </label>
+                    </div>
+
+                    {/* 3. Upload Proof */}
+                    <div>
+                    <p className="text-sm font-bold text-gray-900 mb-2">รูปภาพกล่อง/สิ่งของที่ยืม</p>
+                    <input 
+                        type="file" 
+                        ref={borrowFileInputRef} 
+                        className="hidden" 
+                        accept="image/png, image/jpeg"
+                        onChange={handleBorrowFileChange}
+                    />
+                    
+                    {!borrowProofFile ? (
+                        <div 
+                            onClick={() => borrowFileInputRef.current?.click()}
+                            className="border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center justify-center bg-white hover:bg-blue-50/30 hover:border-primary/50 transition-all cursor-pointer group"
+                        >
+                            <div className="p-4 bg-blue-50 text-primary rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                                <Upload className="w-6 h-6" />
+                            </div>
+                            <p className="text-gray-800 font-bold text-sm">อัปโหลดรูปกล่อง/สิ่งของที่ยืม</p>
+                            <p className="text-xs text-gray-500 mt-1">เพื่อใช้ประกอบการยืนยัน (JPG, PNG)</p>
+                        </div>
+                    ) : (
+                        <div className="border border-green-200 bg-green-50 rounded-2xl p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-green-100 rounded-xl text-green-600">
+                                    <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-green-800 truncate max-w-[200px]">{borrowProofFile.name}</p>
+                                    <p className="text-xs text-green-600 font-medium">{(borrowProofFile.size / 1024).toFixed(1)} KB</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleRemoveBorrowFile}
+                                className="p-1.5 hover:bg-green-100 rounded-full text-green-700 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+                    </div>
+
+                    {/* 4. Duration Selector */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-800 mb-3">จำนวนวันที่ต้องการยืม</label>
+                        <div className="flex items-center gap-3 flex-wrap">
+                            {[3, 7, 14, 30].map(d => (
+                                <button
+                                    key={d}
+                                    onClick={() => setBorrowDays(d)}
+                                    className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all transform active:scale-95 ${
+                                        borrowDays === d 
+                                        ? 'bg-primary text-white shadow-lg shadow-blue-200' 
+                                        : 'bg-white text-gray-600 border border-gray-200 hover:border-primary hover:text-primary'
+                                    }`}
+                                >
+                                    {d} วัน
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-3 font-medium">* กรุณาคืนภายในวันที่กำหนด</p>
+                    </div>
+                </div>
+            )}
+        </Modal>
+
+        {/* NEW: Final Summary Modal */}
+        <Modal
+            isOpen={showBorrowSummary}
+            onClose={() => setShowBorrowSummary(false)}
+            title="สรุปรายการยืม"
+            maxWidth="max-w-md"
+            zIndex="z-[60]"
+            footer={
+                <div className="flex gap-3 w-full">
+                    <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700" onClick={() => setShowBorrowSummary(false)}>กลับไปแก้ไข</Button>
+                    <Button className="flex-1 shadow-lg shadow-blue-200" onClick={executeBorrow} isLoading={isBorrowing}>ยืนยันยืมทันที</Button>
+                </div>
+            }
+        >
+            {borrowTargetBox && (
+                <div className="space-y-4">
+                    {/* Box Info */}
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                        <h4 className="font-bold text-gray-900 text-lg mb-1">{borrowTargetBox.boxName}</h4>
+                        <p className="text-sm text-gray-600">ประเภท: {borrowTargetBox.boxType}</p>
+                    </div>
+
+                    {/* Items List */}
+                    <div>
+                        <h5 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                            <Package size={16}/> รายการสิ่งของที่จะยืม
+                        </h5>
+                        <div className="bg-gray-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2 border border-gray-100">
+                            {groupItemsByName(items.filter(i => i.boxId === borrowTargetBox.boxId && i.itemStatus === 'available')).map((group, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                            <img src={group.img} className="w-8 h-8 object-cover rounded-md bg-gray-100" alt="" />
+                                            <span className="text-gray-700 font-medium">{group.name}</span>
+                                    </div>
+                                    <span className="text-gray-900 font-bold bg-secondary/10 px-2 py-0.5 rounded border border-secondary/20">x{group.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Duration Info */}
+                    <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-xl border border-yellow-100">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-green-100 rounded-xl text-green-600">
-                                <FileText className="w-5 h-5" />
+                            <div className="bg-white p-2 rounded-lg text-secondary-dark shadow-sm">
+                                <CalendarClock size={20} />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-green-800 truncate max-w-[200px]">{borrowProofFile.name}</p>
-                                <p className="text-xs text-green-600 font-medium">{(borrowProofFile.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-xs text-gray-500 font-bold uppercase">ระยะเวลายืม</p>
+                                <p className="font-bold text-gray-900">{borrowDays} วัน</p>
                             </div>
                         </div>
-                        <button 
-                            onClick={handleRemoveBorrowFile}
-                            className="p-1.5 hover:bg-green-100 rounded-full text-green-700 transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                        <div className="text-right">
+                            <p className="text-xs text-gray-500 font-bold uppercase">กำหนดคืน</p>
+                            <p className="font-bold text-primary">{new Date(Date.now() + borrowDays * 86400000).toLocaleDateString('th-TH')}</p>
+                        </div>
                     </div>
-                  )}
                 </div>
+            )}
+        </Modal>
 
-                {/* 4. Duration Selector */}
-                <div>
-                    <label className="block text-sm font-bold text-gray-800 mb-3">จำนวนวันที่ต้องการยืม</label>
-                    <div className="flex items-center gap-3 flex-wrap">
-                         {[3, 7, 14, 30].map(d => (
-                             <button
-                                key={d}
-                                onClick={() => setBorrowDays(d)}
-                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all transform active:scale-95 ${
-                                    borrowDays === d 
-                                    ? 'bg-primary text-white shadow-lg shadow-blue-200' 
-                                    : 'bg-white text-gray-600 border border-gray-200 hover:border-primary hover:text-primary'
-                                }`}
-                             >
-                                 {d} วัน
-                             </button>
-                         ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-3 font-medium">* กรุณาคืนภายในวันที่กำหนด</p>
-                </div>
-            </div>
-        )}
-      </Modal>
-
-      {/* NEW: Final Summary Modal */}
-      <Modal
-        isOpen={showBorrowSummary}
-        onClose={() => setShowBorrowSummary(false)}
-        title="สรุปรายการยืม"
-        maxWidth="max-w-md"
-        zIndex="z-[60]"
-        footer={
-            <div className="flex gap-3 w-full">
-                <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700" onClick={() => setShowBorrowSummary(false)}>กลับไปแก้ไข</Button>
-                <Button className="flex-1 shadow-lg shadow-blue-200" onClick={executeBorrow} isLoading={isBorrowing}>ยืนยันยืมทันที</Button>
-            </div>
-        }
-      >
-         {borrowTargetBox && (
-            <div className="space-y-4">
-                 {/* Box Info */}
-                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                     <h4 className="font-bold text-gray-900 text-lg mb-1">{borrowTargetBox.boxName}</h4>
-                     <p className="text-sm text-gray-600">ประเภท: {borrowTargetBox.boxType}</p>
-                 </div>
-
-                 {/* Items List */}
-                 <div>
-                     <h5 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                         <Package size={16}/> รายการสิ่งของที่จะยืม
-                     </h5>
-                     <div className="bg-gray-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2 border border-gray-100">
-                          {groupItemsByName(items.filter(i => i.boxId === borrowTargetBox.boxId && i.itemStatus === 'available')).map((group, idx) => (
-                               <div key={idx} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-100">
-                                   <div className="flex items-center gap-3">
-                                        <img src={group.img} className="w-8 h-8 object-cover rounded-md bg-gray-100" alt="" />
-                                        <span className="text-gray-700 font-medium">{group.name}</span>
-                                   </div>
-                                   <span className="text-gray-900 font-bold bg-secondary/10 px-2 py-0.5 rounded border border-secondary/20">x{group.count}</span>
-                               </div>
-                          ))}
-                     </div>
-                 </div>
-
-                 {/* Duration Info */}
-                 <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-xl border border-yellow-100">
-                     <div className="flex items-center gap-3">
-                         <div className="bg-white p-2 rounded-lg text-secondary-dark shadow-sm">
-                             <CalendarClock size={20} />
-                         </div>
-                         <div>
-                             <p className="text-xs text-gray-500 font-bold uppercase">ระยะเวลายืม</p>
-                             <p className="font-bold text-gray-900">{borrowDays} วัน</p>
-                         </div>
-                     </div>
-                     <div className="text-right">
-                         <p className="text-xs text-gray-500 font-bold uppercase">กำหนดคืน</p>
-                         <p className="font-bold text-primary">{new Date(Date.now() + borrowDays * 86400000).toLocaleDateString('th-TH')}</p>
-                     </div>
-                 </div>
-            </div>
-         )}
-      </Modal>
-
-    </div>
+        </div>
+    </ErrorBoundary>
   );
 }
