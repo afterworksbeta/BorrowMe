@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { LucideIcon, Eye, EyeOff, Bell, CalendarClock, AlertCircle, CheckCircle, XCircle, FileText, Info, Trash2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -468,9 +469,17 @@ export const Modal: React.FC<ModalProps> = ({
   isOpen, onClose, title, children, footer, 
   maxWidth = 'max-w-md', zIndex = 'z-50' 
 }) => {
-  if (!isOpen) return null;
-  return (
-    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center p-4 sm:p-6`}>
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
+
+  return createPortal(
+    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center p-4 sm:p-6 text-left`}>
       <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
       <div 
         className={`relative bg-surface rounded-3xl shadow-soft w-full ${maxWidth} max-h-[85vh] flex flex-col transform transition-all animate-in fade-in zoom-in-95 duration-200 border border-gray-100`}
@@ -495,7 +504,8 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

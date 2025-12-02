@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Record, Item, Box, RecordStatus } from '../types';
 import { Button, Badge, Modal } from '../components/Common';
@@ -99,6 +100,7 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [returnProofFile, setReturnProofFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Checkbox Style matching new theme (Yellow/Secondary)
@@ -144,13 +146,17 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSubmitReturn = () => {
-      const proofUrl = returnProofFile 
-          ? URL.createObjectURL(returnProofFile) 
-          : "https://picsum.photos/400/600"; 
-          
-      // DB.requestReturn(id, proofUrl) -> DB.requestReturnBatch
-      DB.requestReturnBatch(Array.from(selectedRecordIds), proofUrl);
+  const handleSubmitReturn = async () => {
+      setIsLoading(true);
+      
+      let proofUrl = "https://picsum.photos/400/600";
+      if (returnProofFile) {
+        const uploaded = await DB.uploadFile(returnProofFile, 'return-proofs');
+        if (uploaded) proofUrl = uploaded;
+      }
+
+      await DB.requestReturnBatch(Array.from(selectedRecordIds), proofUrl);
+      setIsLoading(false);
       setReturnModalOpen(false);
   };
 
@@ -275,7 +281,8 @@ const BorrowingList: React.FC<{ records: Record[], items: Item[], boxes: Box[], 
                 <Button 
                     onClick={handleSubmitReturn} 
                     className="w-full" 
-                    disabled={!isReturnValid}
+                    disabled={!isReturnValid || isLoading}
+                    isLoading={isLoading}
                 >
                   ยืนยันการขอคืน ({selectedRecordIds.size} รายการ)
                 </Button>

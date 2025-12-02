@@ -61,45 +61,72 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       type: string, 
       coverFile: File | null, 
       coverUrlPreview: string,
-      items: {name: string, img: string, qty: number}[]
+      items: {name: string, img: string, qty: number, file?: File | null}[]
   }>({
     name: '', type: '', coverFile: null, coverUrlPreview: '', items: []
   });
   
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [deleteTargetBox, setDeleteTargetBox] = useState<PopulatedBox | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setError(null);
     if(!formData.name.trim() || !formData.type.trim()) {
         setError('กรุณากรอกข้อมูลให้ครบถ้วน');
         return;
     }
     
+    setIsLoading(true);
+
     let coverUrl = formData.coverUrlPreview;
     if (formData.coverFile) {
-        coverUrl = URL.createObjectURL(formData.coverFile);
+        const uploaded = await DB.uploadFile(formData.coverFile, 'box-covers');
+        if (uploaded) coverUrl = uploaded;
     }
 
+    // Handle Item Images Upload
+    const processedItems = await Promise.all(formData.items.map(async (item) => {
+        let itemImg = item.img;
+        if (item.file) {
+            const uploaded = await DB.uploadFile(item.file, 'item-images');
+            if (uploaded) itemImg = uploaded;
+        }
+        return { name: item.name, img: itemImg, qty: item.qty };
+    }));
+
     if (editingBoxId) {
-        DB.updateBox(editingBoxId, {
+        const result = await DB.updateBox(editingBoxId, {
             boxName: formData.name,
             boxType: formData.type,
             coverImageUrl: coverUrl
-        }, formData.items);
+        }, processedItems);
+
+        if (!result.success) {
+            setError(result.error || 'Update failed');
+            setIsLoading(false);
+            return;
+        }
     } else {
-        DB.createBox(formData.name, formData.type, coverUrl, formData.items);
+        const result = await DB.createBox(formData.name, formData.type, coverUrl, processedItems);
+        
+        if (!result.success) {
+            setError(result.error || 'Creation failed');
+            setIsLoading(false);
+            return;
+        }
     }
 
+    setIsLoading(false);
     setIsModalOpen(false);
     setEditingBoxId(null);
     setFormData({ name: '', type: '', coverFile: null, coverUrlPreview: '', items: [] });
   };
 
-  const handleEditBox = (box: PopulatedBox) => {
+  const handleEditBox = async (box: PopulatedBox) => {
       setEditingBoxId(box.boxId);
-      const boxItems = DB.getBoxItems(box.boxId);
+      const boxItems = await DB.getBoxItems(box.boxId);
       
       const aggregatedItems: {name: string, img: string, qty: number}[] = [];
       const processedNames = new Set<string>();
@@ -107,9 +134,13 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       boxItems.forEach(item => {
           if (processedNames.has(item.itemName)) return;
           const count = boxItems.filter(i => i.itemName === item.itemName).length;
+          
+          // Fix: Find the first item with an image, if available
+          const representativeItem = boxItems.find(i => i.itemName === item.itemName && i.itemImageUrl) || item;
+
           aggregatedItems.push({
               name: item.itemName,
-              img: item.itemImageUrl,
+              img: representativeItem.itemImageUrl,
               qty: count
           });
           processedNames.add(item.itemName);
@@ -130,9 +161,9 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       setDeleteTargetBox(box);
   };
   
-  const confirmDeleteBox = () => {
+  const confirmDeleteBox = async () => {
       if (deleteTargetBox) {
-          DB.deleteBox(deleteTargetBox.boxId);
+          await DB.deleteBox(deleteTargetBox.boxId);
           setDeleteTargetBox(null);
       }
   };
@@ -141,10 +172,12 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       setFormData(prev => ({...prev, items: [...prev.items, {name: '', img: '', qty: 1}]}));
   };
   
-  const updateItemRow = (idx: number, field: 'name'|'img'|'qty', val: string | number) => {
-      const newItems = [...formData.items];
-      newItems[idx] = { ...newItems[idx], [field]: val };
-      setFormData(prev => ({...prev, items: newItems}));
+  const updateItemRow = (idx: number, field: 'name'|'img'|'qty'|'file', val: any) => {
+      setFormData(prev => {
+          const newItems = [...prev.items];
+          newItems[idx] = { ...newItems[idx], [field]: val };
+          return { ...prev, items: newItems };
+      });
   };
 
   const removeItemRow = (idx: number) => {
@@ -187,21 +220,34 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                     <p className="text-xs text-gray-500 font-medium line-clamp-1">{box.boxType}</p>
                 </div>
             </div>
-            <div className="mt-auto flex justify-between items-center text-sm border-t border-gray-50 pt-3">
-                <span className="text-gray-700 font-medium">สิ่งของ {box.itemCount} รายการ</span>
-                <div className="space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex">
-                    <button 
-                        className="text-gray-400 hover:text-secondary-dark p-1.5 hover:bg-yellow-50 rounded-lg transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleEditBox(box); }}
-                    >
-                        <Edit className="w-4 h-4" />
-                    </button>
-                    <button 
-                        className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleRequestDeleteBox(box); }}
-                    >
-                        <Trash className="w-4 h-4" />
-                    </button>
+            
+            {/* New Text Summary UI for Admin (Matches HomeView Style) */}
+            <div className="mt-auto border-t border-gray-50 pt-3">
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center text-xs gap-1">
+                        <span className="text-gray-600">ของทั้งหมด {box.itemCount}</span>
+                        <span className="text-gray-300 mx-1">-</span>
+                        <span className="text-green-600 font-bold">พร้อม {box.availableCount}</span>
+                         {box.itemCount > box.availableCount && (
+                             <span className="text-gray-400 ml-1 hidden sm:inline">
+                                 (ยืม {box.itemCount - box.availableCount})
+                             </span>
+                         )}
+                    </div>
+                    <div className="flex space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            className="text-gray-400 hover:text-secondary-dark p-1.5 hover:bg-yellow-50 rounded-lg transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleEditBox(box); }}
+                        >
+                            <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                            className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleRequestDeleteBox(box); }}
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
           </div>
@@ -213,8 +259,9 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
         onClose={() => setIsModalOpen(false)} 
         title={editingBoxId ? "แก้ไขกล่อง" : "เพิ่มกล่องใหม่"}
         maxWidth="max-w-3xl"
-        footer={<Button className="w-full shadow-lg shadow-blue-200" onClick={handleCreate}>{editingBoxId ? "บันทึกการแก้ไข" : "บันทึกกล่อง"}</Button>}
+        footer={<Button className="w-full shadow-lg shadow-blue-200" onClick={handleCreate} isLoading={isLoading}>{editingBoxId ? "บันทึกการแก้ไข" : "บันทึกกล่อง"}</Button>}
       >
+        {/* ... Modal Content kept the same ... */}
         <div className="space-y-6">
             {error && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
@@ -275,7 +322,14 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                             <div className="flex-[2] flex flex-col justify-center">
                                 <input type="file" id={`item-upload-${idx}`} className="hidden" accept="image/*" onChange={(e) => {
                                     if (e.target.files && e.target.files[0]) {
-                                        updateItemRow(idx, 'img', URL.createObjectURL(e.target.files[0]));
+                                        // Functional Update to avoid stale state issues
+                                        const file = e.target.files[0];
+                                        const url = URL.createObjectURL(file);
+                                        setFormData(prev => {
+                                            const newItems = [...prev.items];
+                                            newItems[idx] = { ...newItems[idx], img: url, file: file };
+                                            return { ...prev, items: newItems };
+                                        });
                                     }
                                 }}/>
                                 <div className="flex items-center gap-2">
@@ -340,6 +394,7 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
     });
 
     const [selectedGroup, setSelectedGroup] = useState<Record[] | null>(null);
+    const [rejectReason, setRejectReason] = useState('');
 
     // Grouping helper for the modal display
     const groupedSelectedItems = useMemo(() => {
@@ -358,18 +413,17 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
 
 
     // 2. Handle Approval Action with Logging
-    const handleApprove = (isApproved: boolean) => {
-        console.log("handleApprove", isApproved, selectedGroup);
+    const handleApprove = async (isApproved: boolean) => {
         if(!selectedGroup) return;
         
         // Execute DB update for each record in the group
-        selectedGroup.forEach(r => {
-            DB.adminApproveReturn(r.recordId, isApproved);
-        });
+        for (const r of selectedGroup) {
+            await DB.adminApproveReturn(r.recordId, isApproved, !isApproved ? rejectReason : undefined);
+        }
 
         // Clear selection
         setSelectedGroup(null);
-        // DB service handles notify() automatically
+        setRejectReason('');
     };
 
     return (
@@ -413,8 +467,20 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
                 maxWidth="max-w-3xl"
                 footer={selectedGroup && (
                     <div className="flex gap-4 w-full">
-                        <Button className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 shadow-none" variant="danger" onClick={() => handleApprove(false)}>ไม่อนุมัติ</Button>
-                        <Button className="flex-1 shadow-lg shadow-green-200" variant="success" onClick={() => handleApprove(true)}>อนุมัติการคืน</Button>
+                        <Button 
+                            className="flex-1 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-none transition-all" 
+                            variant="outline"
+                            onClick={() => handleApprove(false)}
+                        >
+                            ไม่อนุมัติ
+                        </Button>
+                        <Button 
+                            className="flex-1 shadow-lg shadow-green-200" 
+                            variant="success" 
+                            onClick={() => handleApprove(true)}
+                        >
+                            อนุมัติการคืน
+                        </Button>
                     </div>
                 )}
             >
@@ -461,6 +527,18 @@ const ApprovalsView: React.FC<{ records: Record[], items: Item[], boxes: Populat
                                 </div>
                             </div>
                         )}
+                        
+                        {/* Add Admin Note Input */}
+                        <div className="pt-4 border-t border-gray-100">
+                             <label className="text-sm font-bold text-gray-900 mb-2 block">หมายเหตุ / เหตุผล (กรณีไม่อนุมัติ)</label>
+                             <textarea 
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all placeholder:text-gray-400"
+                                placeholder="ระบุเหตุผลที่ไม่อนุมัติการคืน..."
+                                rows={2}
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                             />
+                        </div>
                     </div>
                 )}
             </Modal>
@@ -569,7 +647,6 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
 
     // 2. Handle Status Change
     const handleStatusChange = async (recordIds: string[], newStatus: 'borrowing' | 'returned') => {
-        console.log("handleStatusChange", recordIds, newStatus);
         try {
             setIsUpdating(true);
             
@@ -800,7 +877,7 @@ const HistoryView: React.FC<{ records: Record[], items: Item[], boxes: Populated
                                         </td>
                                         <td className="py-4 px-4 text-gray-800 font-medium">{new Date(group.borrowedAt).toLocaleDateString('th-TH')}</td>
                                         <td className="py-4 px-4">
-                                            <div className="font-bold text-gray-900">{group.userName}</div>
+                                            <div className={`font-bold ${group.userName === 'ผู้ใช้ที่ถูกลบ' ? 'text-gray-400 italic' : 'text-gray-900'}`}>{group.userName}</div>
                                             <div className="text-xs text-gray-500">{group.userEmail}</div>
                                         </td>
                                         <td className="py-4 px-4">

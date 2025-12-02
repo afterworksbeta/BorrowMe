@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useState, useRef } from 'react';
 import * as DB from './services/db';
 import { User, PopulatedBox, Item, Record, PendingBorrowAction, AdminNotification } from './types';
@@ -6,7 +8,7 @@ import AuthModal from './components/AuthModal';
 import SettingsModal from './components/SettingsModal';
 import UserView from './views/UserView';
 import AdminDashboard from './views/AdminDashboard';
-import { LogOut, Package, User as UserIcon, Box as BoxIcon, CheckCircle2, Upload, FileText, X } from 'lucide-react';
+import { LogOut, Package, User as UserIcon, Box as BoxIcon, CheckCircle2, Upload, FileText, X, CalendarClock } from 'lucide-react';
 
 export default function App() {
   // Global State
@@ -37,6 +39,10 @@ export default function App() {
   const [hasCheckedItems, setHasCheckedItems] = useState(false);
   const borrowFileInputRef = useRef<HTMLInputElement>(null);
 
+  // New State for Borrow Summary Confirmation
+  const [showBorrowSummary, setShowBorrowSummary] = useState(false);
+  const [isBorrowing, setIsBorrowing] = useState(false);
+
   // Navigation State
   const [view, setView] = useState<'home' | 'user' | 'admin'>('home');
   // Admin Tab State (for navigation from notifications)
@@ -44,17 +50,32 @@ export default function App() {
   // Navigation Tick: A counter to force useEffect to trigger even if the tab value is the same
   const [navigationTick, setNavigationTick] = useState(0);
 
-  // Checkbox Style matching Admin (Orange Theme) - Updated to Blue/Secondary
+  // Checkbox Style matching new theme (Yellow/Secondary)
   const checkboxClass = "appearance-none h-5 w-5 rounded border border-gray-300 bg-white cursor-pointer transition-all checked:bg-secondary checked:border-secondary-dark relative checked:after:content-[''] checked:after:absolute checked:after:top-1/2 checked:after:left-1/2 checked:after:-translate-x-1/2 checked:after:-translate-y-1/2 checked:after:w-2.5 checked:after:h-2.5 checked:after:rounded-sm checked:after:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1";
 
   // Initialization & "Realtime" Subscription
   useEffect(() => {
-    const fetchData = () => {
-      setBoxes(DB.getBoxes());
-      setItems(DB.getItems());
-      setRecords(DB.getRecords());
-      setCurrentUser(DB.getCurrentUser());
-      setAdminNotifications(DB.getAdminNotifications()); // Fetch Admin Notifs
+    const fetchData = async () => {
+      // Parallel fetch for efficiency
+      const [fetchedBoxes, fetchedItems, fetchedRecords, fetchedUser, fetchedNotifs] = await Promise.all([
+        DB.getBoxes(),
+        DB.getItems(),
+        DB.getRecords(),
+        DB.getCurrentUser(),
+        DB.getAdminNotifications()
+      ]);
+
+      // Filter out orphan records (records pointing to boxes that no longer exist)
+      // This solves the issue of "Unknown Box" appearing after admin deletion
+      const validRecords = fetchedRecords.filter(r => 
+        fetchedBoxes.some(b => b.boxId === r.boxId)
+      );
+
+      setBoxes(fetchedBoxes);
+      setItems(fetchedItems);
+      setRecords(validRecords);
+      setCurrentUser(fetchedUser);
+      setAdminNotifications(fetchedNotifs); 
       setIsLoading(false);
     };
 
@@ -197,9 +218,9 @@ export default function App() {
   };
 
   // Handlers
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = async () => {
     setAuthModalOpen(false);
-    const user = DB.getCurrentUser();
+    const user = await DB.getCurrentUser();
     setCurrentUser(user);
     
     // Redirect Admin to Admin Dashboard
@@ -221,11 +242,19 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    DB.logoutUser();
-    setCurrentUser(null);
-    setView('home');
-    setIsProfileMenuOpen(false);
+  const handleLogout = async () => {
+    try {
+        await DB.logoutUser();
+    } finally {
+        // Optimistically clean up UI state even if API fails
+        setCurrentUser(null);
+        setRecords([]); // Clear records to avoid flash of old data
+        setAdminNotifications([]); // Clear notifications
+        setView('home');
+        setIsProfileMenuOpen(false);
+        // Also close settings if open
+        setIsSettingsOpen(false);
+    }
   };
 
   const handleBorrowBoxClick = (boxId: string) => {
@@ -263,20 +292,27 @@ export default function App() {
     if (borrowFileInputRef.current) borrowFileInputRef.current.value = '';
   };
 
-  const confirmBorrow = () => {
+  const executeBorrow = async () => {
     if (!currentUser || !borrowTargetBox) return;
     
-    // Use uploaded file or null (though button should be disabled if null)
-    const proofUrl = borrowProofFile ? URL.createObjectURL(borrowProofFile) : null;
+    setIsBorrowing(true);
 
-    const count = DB.borrowBox(
+    let proofUrl = null;
+    if (borrowProofFile) {
+        proofUrl = await DB.uploadFile(borrowProofFile, 'borrow-proofs');
+    }
+
+    const count = await DB.borrowBox(
       currentUser.userId, 
       borrowTargetBox.boxId, 
       borrowDays,
       proofUrl
     );
 
+    setIsBorrowing(false);
+
     if (count > 0) {
+      setShowBorrowSummary(false);
       setBorrowModalOpen(false);
       setBorrowTargetBox(null);
       setSelectedBox(null);
@@ -292,13 +328,13 @@ export default function App() {
       setIsProfileMenuOpen(false);
   };
 
-  const handleNotificationClick = (item: NotificationItem) => {
+  const handleNotificationClick = async (item: NotificationItem) => {
     // Mark as read in UI
     markAsRead(item.id);
 
     // If Admin, also sync read status to DB
     if (currentUser?.role === 'admin') {
-        DB.markAdminNotificationRead(item.id);
+        await DB.markAdminNotificationRead(item.id);
     }
 
     if (!currentUser) return;
@@ -318,24 +354,24 @@ export default function App() {
     }
   };
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
       markAllAsRead();
       if (currentUser?.role === 'admin') {
-          DB.markAllAdminNotificationsRead();
+          await DB.markAllAdminNotificationsRead();
       }
   };
 
-  const handleClearAllNotifications = () => {
+  const handleClearAllNotifications = async () => {
     if (currentUser?.role === 'admin') {
-      DB.clearAllAdminNotifications();
+      await DB.clearAllAdminNotifications();
     }
     clearAllNotifications();
   };
 
   // Sync deletion: Remove from DB + Remove from Notifications
-  const handleDeleteRecords = (recordIds: string[]) => {
+  const handleDeleteRecords = async (recordIds: string[]) => {
     // 1. Delete from DB
-    DB.adminDeleteRecords(recordIds);
+    await DB.adminDeleteRecords(recordIds);
     // 2. Clear related notifications
     recordIds.forEach(id => removeNotificationsByRecordId(id));
   };
@@ -488,18 +524,17 @@ export default function App() {
                 </div>
             </div>
             <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-primary transition-colors line-clamp-1">{box.boxName}</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-primary transition-colors line-clamp-1">{box.boxName}</h3>
               
-              <div className="mb-6 mt-2">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
+              <div className="mb-6">
+                  <div className="flex items-center text-sm gap-1">
                       <span className="text-gray-600">ของทั้งหมด {box.itemCount} รายการ</span>
-                      <span className="text-gray-300">-</span>
+                      <span className="mx-2 text-gray-300">-</span>
                       <span className="text-green-600 font-bold">พร้อม {box.availableCount} รายการ</span>
                   </div>
                   {box.itemCount > box.availableCount && (
-                      <p className="text-xs text-gray-400 mt-1.5 font-medium flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-                          กำลังถูกยืม {box.itemCount - box.availableCount} รายการ
+                      <p className="text-xs text-gray-400 mt-1">
+                         (กำลังถูกยืม {box.itemCount - box.availableCount} รายการ)
                       </p>
                   )}
               </div>
@@ -550,7 +585,8 @@ export default function App() {
     <div className="w-full">
         <div className="flex gap-3 w-full">
             <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 shadow-none" onClick={() => setBorrowModalOpen(false)}>ยกเลิก</Button>
-            <Button className="flex-1" onClick={confirmBorrow} disabled={!isBorrowValid}>ยืนยันการยืม</Button>
+            {/* Changed from direct confirm to open summary */}
+            <Button className="flex-1" onClick={() => setShowBorrowSummary(true)} disabled={!isBorrowValid}>ยืนยันการยืม</Button>
         </div>
         {!isBorrowValid && (
             <p className="text-xs text-danger text-center mt-3 font-medium animate-pulse">
@@ -622,6 +658,7 @@ export default function App() {
               onClose={() => setIsSettingsOpen(false)}
               currentUser={currentUser}
               initialTab={settingsInitialTab}
+              onLogout={handleLogout}
           />
       )}
 
@@ -776,6 +813,66 @@ export default function App() {
                 </div>
             </div>
         )}
+      </Modal>
+
+      {/* NEW: Final Summary Modal */}
+      <Modal
+        isOpen={showBorrowSummary}
+        onClose={() => setShowBorrowSummary(false)}
+        title="สรุปรายการยืม"
+        maxWidth="max-w-md"
+        zIndex="z-[60]"
+        footer={
+            <div className="flex gap-3 w-full">
+                <Button variant="secondary" className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700" onClick={() => setShowBorrowSummary(false)}>กลับไปแก้ไข</Button>
+                <Button className="flex-1 shadow-lg shadow-blue-200" onClick={executeBorrow} isLoading={isBorrowing}>ยืนยันยืมทันที</Button>
+            </div>
+        }
+      >
+         {borrowTargetBox && (
+            <div className="space-y-4">
+                 {/* Box Info */}
+                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                     <h4 className="font-bold text-gray-900 text-lg mb-1">{borrowTargetBox.boxName}</h4>
+                     <p className="text-sm text-gray-600">ประเภท: {borrowTargetBox.boxType}</p>
+                 </div>
+
+                 {/* Items List */}
+                 <div>
+                     <h5 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                         <Package size={16}/> รายการสิ่งของที่จะยืม
+                     </h5>
+                     <div className="bg-gray-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2 border border-gray-100">
+                          {groupItemsByName(items.filter(i => i.boxId === borrowTargetBox.boxId && i.itemStatus === 'available')).map((group, idx) => (
+                               <div key={idx} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-100">
+                                   <div className="flex items-center gap-3">
+                                        <img src={group.img} className="w-8 h-8 object-cover rounded-md bg-gray-100" alt="" />
+                                        <span className="text-gray-700 font-medium">{group.name}</span>
+                                   </div>
+                                   <span className="text-gray-900 font-bold bg-secondary/10 px-2 py-0.5 rounded border border-secondary/20">x{group.count}</span>
+                               </div>
+                          ))}
+                     </div>
+                 </div>
+
+                 {/* Duration Info */}
+                 <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                     <div className="flex items-center gap-3">
+                         <div className="bg-white p-2 rounded-lg text-secondary-dark shadow-sm">
+                             <CalendarClock size={20} />
+                         </div>
+                         <div>
+                             <p className="text-xs text-gray-500 font-bold uppercase">ระยะเวลายืม</p>
+                             <p className="font-bold text-gray-900">{borrowDays} วัน</p>
+                         </div>
+                     </div>
+                     <div className="text-right">
+                         <p className="text-xs text-gray-500 font-bold uppercase">กำหนดคืน</p>
+                         <p className="font-bold text-primary">{new Date(Date.now() + borrowDays * 86400000).toLocaleDateString('th-TH')}</p>
+                     </div>
+                 </div>
+            </div>
+         )}
       </Modal>
 
     </div>
