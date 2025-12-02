@@ -116,9 +116,9 @@ export const uploadFile = async (file: File, path: string): Promise<string | nul
 
 const mapUser = (data: any): User => ({
     userId: data.id,
-    name: data.name,
-    email: data.email,
-    phone: data.phone,
+    name: data.name || '',
+    email: data.email || '',
+    phone: data.phone || '',
     role: data.role as 'user' | 'admin',
     avatarUrl: data.avatar_url,
     createdAt: data.created_at,
@@ -210,7 +210,7 @@ export const loginUser = async (email: string, password: string): Promise<{ user
          console.warn('User authenticated but profile missing. Attempting recovery...');
          const recoveryProfile = {
             id: data.user.id,
-            email: data.user.email,
+            email: data.user.email || '', // Fix: Handle potential undefined from auth
             name: 'User', // Placeholder
             phone: '',
             role: data.user.email === 'admin@example.com' ? 'admin' : 'user' // Auto-admin for specific email
@@ -598,7 +598,7 @@ export const createBox = async (name: string, type: string, coverUrl: string, ne
         return { success: false, error: errorMsg };
     }
 
-    const itemsPayload = [];
+    const itemsPayload: any[] = [];
     newItems.forEach((itm, idx) => {
         for (let i = 0; i < itm.qty; i++) {
             itemsPayload.push({

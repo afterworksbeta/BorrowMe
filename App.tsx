@@ -18,8 +18,11 @@ interface ErrorBoundaryState {
 }
 
 // Error Boundary Component to catch rendering errors and prevent white screens
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false, error: '' };
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
 
   static getDerivedStateFromError(error: any): ErrorBoundaryState {
     return { hasError: true, error: error.toString() };
@@ -182,7 +185,7 @@ export default function App() {
 
     } else {
         // USER: Derive from Records (computed on the fly)
-        const userNotifs: NotificationItem[] = [];
+        const userNotifs: NotificationItem[] = []; // Explicitly typed to prevent implicit never[] error
         
         // Group records by Box to deduplicate notifications
         const recordsByBox: { [key: string]: Record[] } = {};
