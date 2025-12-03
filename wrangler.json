@@ -1,7 +1,4 @@
 {
   "name": "borrowmestorage",
-  "compatibility_date": "2025-12-03",
-  "assets": {
-    "directory": "./dist"
-  }
+  "compatibility_date": "2025-12-03"
 }
