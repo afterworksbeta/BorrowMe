@@ -26,48 +26,30 @@ export const subscribe = (listener: Listener) => {
 };
 
 // Initialize Realtime Subscription
-try {
-    supabase.channel('public:all')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        console.log('Realtime update received');
-        notify();
-      })
-      .subscribe();
-} catch (e) {
-    console.error("Realtime subscription failed:", e);
-}
+supabase.channel('public:all')
+  .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+    console.log('Realtime update received');
+    notify();
+  })
+  .subscribe();
 
 // --- HELPER: CONNECTION CHECK ---
-export const checkConnection = async (): Promise<{ success: boolean; message?: string; details?: string }> => {
+export const checkConnection = async (): Promise<boolean> => {
     try {
         // Try to fetch a small piece of data to verify connectivity
-        // Using 'head: true' to minimize data transfer
         const { error } = await supabase.from('boxes').select('box_id', { count: 'exact', head: true });
         
+        // If error is null, connection is good. 
+        // If error is 401/403, Key is wrong. 
+        // If error is Network, connection is bad.
         if (error) {
-            console.error('Connection Check Failed:', error);
-            
-            // Analyze Error Code
-            if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
-                return { success: false, message: 'API Key ไม่ถูกต้อง หรือหมดอายุ', details: error.message };
-            }
-            if (error.code === '42P01') {
-                return { success: false, message: 'ไม่พบตารางในฐานข้อมูล (ยังไม่ได้รัน SQL Setup)', details: error.message };
-            }
-            if (error.code === '42501') {
-                return { success: false, message: 'เชื่อมต่อได้ แต่ไม่มีสิทธิ์อ่านข้อมูล (ติด RLS Policy)', details: error.message };
-            }
-            if (error.message?.includes('Failed to fetch') || error.message?.includes('Network request failed')) {
-                return { success: false, message: 'ไม่สามารถติดต่อ Server ได้ (Network Error)', details: 'ตรวจสอบอินเทอร์เน็ต หรือ API Key อาจผิด' };
-            }
-            
-            return { success: false, message: `เกิดข้อผิดพลาด: ${error.message}`, details: error.code };
+            console.error('Connection Check Failed:', error.message);
+            return false;
         }
-        
-        return { success: true };
-    } catch (e: any) {
+        return true;
+    } catch (e) {
         console.error('Connection Exception:', e);
-        return { success: false, message: 'Client Error (Javascript)', details: e.message };
+        return false;
     }
 };
 
@@ -116,9 +98,9 @@ export const uploadFile = async (file: File, path: string): Promise<string | nul
 
 const mapUser = (data: any): User => ({
     userId: data.id,
-    name: data.name || '',
-    email: data.email || '',
-    phone: data.phone || '',
+    name: data.name,
+    email: data.email,
+    phone: data.phone,
     role: data.role as 'user' | 'admin',
     avatarUrl: data.avatar_url,
     createdAt: data.created_at,
@@ -210,7 +192,7 @@ export const loginUser = async (email: string, password: string): Promise<{ user
          console.warn('User authenticated but profile missing. Attempting recovery...');
          const recoveryProfile = {
             id: data.user.id,
-            email: data.user.email || '', // Fix: Handle potential undefined from auth
+            email: data.user.email,
             name: 'User', // Placeholder
             phone: '',
             role: data.user.email === 'admin@example.com' ? 'admin' : 'user' // Auto-admin for specific email
@@ -598,7 +580,7 @@ export const createBox = async (name: string, type: string, coverUrl: string, ne
         return { success: false, error: errorMsg };
     }
 
-    const itemsPayload: any[] = [];
+    const itemsPayload = [];
     newItems.forEach((itm, idx) => {
         for (let i = 0; i < itm.qty; i++) {
             itemsPayload.push({
