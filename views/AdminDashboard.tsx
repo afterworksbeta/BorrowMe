@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { PopulatedBox, Item, Record, RecordStatus } from '../types';
 import { Button, Input, Modal, Select } from '../components/Common';
 import * as DB from '../services/db';
-import { Plus, Edit, Trash, Search, Upload, Image as ImageIcon, AlertTriangle, X, CheckCircle2, Copy, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash, Search, Upload, Image as ImageIcon, AlertTriangle, X, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 
 interface AdminDashboardProps {
   boxes: PopulatedBox[];
@@ -69,11 +69,14 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteTargetBox, setDeleteTargetBox] = useState<PopulatedBox | null>(null);
+  const [imageLoadError, setImageLoadError] = useState(false);
   
-  // New: Loading state for duplication
-  const [duplicatingBoxId, setDuplicatingBoxId] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset image error state when preview changes
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [formData.coverUrlPreview]);
 
   const handleCreate = async () => {
     setError(null);
@@ -161,18 +164,6 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       setIsModalOpen(true);
   };
   
-  const handleDuplicateBox = async (box: PopulatedBox) => {
-      if (confirm(`ยืนยันการทำซ้ำกล่อง "${box.boxName}" ?`)) {
-          setDuplicatingBoxId(box.boxId);
-          const result = await DB.duplicateBox(box.boxId);
-          setDuplicatingBoxId(null);
-          
-          if (!result.success) {
-              alert(`เกิดข้อผิดพลาดในการทำซ้ำกล่อง: ${result.error}`);
-          }
-      }
-  };
-
   const handleRequestDeleteBox = (box: PopulatedBox) => {
       setDeleteTargetBox(box);
   };
@@ -211,6 +202,14 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       }
   };
 
+  const handleRemoveCover = (e: React.MouseEvent) => {
+      e.stopPropagation(); // Prevent bubbling
+      e.preventDefault();
+      setFormData(prev => ({...prev, coverUrlPreview: '', coverFile: null}));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setImageLoadError(false);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -226,19 +225,31 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {boxes.map(box => (
-          <div key={box.boxId} className="border border-gray-100 rounded-2xl p-4 flex flex-col hover:border-primary/50 hover:shadow-lg hover:shadow-blue-100/50 transition-all group bg-white">
+          <div key={box.boxId} className="bg-white rounded-2xl p-4 shadow-card hover:shadow-soft transition-all border border-gray-100 flex flex-col h-full group">
             <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-xl overflow-hidden aspect-[16/9] border border-gray-100 bg-gray-50">
-                    <img src={box.coverImageUrl} className="w-full h-full object-cover object-center" alt="" />
+                <div className="w-16 h-16 rounded-xl overflow-hidden aspect-[16/9] border border-gray-100 bg-gray-50 flex-shrink-0 relative">
+                    <img 
+                        src={box.coverImageUrl} 
+                        className="w-full h-full object-cover object-center" 
+                        alt="" 
+                        onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement?.classList.add('bg-gray-200', 'flex', 'items-center', 'justify-center');
+                            e.currentTarget.parentElement!.innerHTML = '<span class="text-xs text-gray-400">No Image</span>';
+                        }}
+                    />
                 </div>
-                <div>
+                <div 
+                    className="min-w-0 cursor-pointer"
+                    onClick={() => handleEditBox(box)}
+                    title="คลิกเพื่อแก้ไข"
+                >
                     <h3 className="font-bold text-gray-900 line-clamp-1 group-hover:text-primary transition-colors">{box.boxName}</h3>
                     <p className="text-xs text-gray-500 font-medium line-clamp-1">{box.boxType}</p>
                 </div>
             </div>
             
-            {/* New Text Summary UI for Admin (Matches HomeView Style) */}
-            <div className="mt-auto border-t border-gray-50 pt-3">
+            <div className="mt-auto border-t border-gray-50 pt-3 w-full">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center text-xs gap-1">
                         <span className="text-gray-600">ของทั้งหมด {box.itemCount}</span>
@@ -252,22 +263,16 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                     </div>
                     <div className="flex space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
-                            className="text-gray-400 hover:text-primary p-1.5 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
-                            onClick={(e) => { e.stopPropagation(); handleDuplicateBox(box); }}
-                            title="ทำซ้ำกล่อง"
-                            disabled={duplicatingBoxId === box.boxId}
-                        >
-                            {duplicatingBoxId === box.boxId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                        <button 
-                            className="text-gray-400 hover:text-secondary-dark p-1.5 hover:bg-yellow-50 rounded-lg transition-colors"
-                            onClick={(e) => { e.stopPropagation(); handleEditBox(box); }}
+                            type="button"
+                            className="text-gray-400 hover:text-secondary-dark p-1.5 hover:bg-yellow-50 rounded-lg transition-colors relative z-20"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditBox(box); }}
                         >
                             <Edit className="w-4 h-4" />
                         </button>
                         <button 
-                            className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
-                            onClick={(e) => { e.stopPropagation(); handleRequestDeleteBox(box); }}
+                            type="button"
+                            className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors relative z-20"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRequestDeleteBox(box); }}
                         >
                             <Trash className="w-4 h-4" />
                         </button>
@@ -285,7 +290,6 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
         maxWidth="max-w-3xl"
         footer={<Button className="w-full shadow-lg shadow-blue-200" onClick={handleCreate} isLoading={isLoading}>{editingBoxId ? "บันทึกการแก้ไข" : "บันทึกกล่อง"}</Button>}
       >
-        {/* ... Modal Content kept the same ... */}
         <div className="space-y-6">
             {error && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
@@ -323,8 +327,27 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                     )}
                 </div>
                 {formData.coverUrlPreview && (
-                     <div className="mt-3 w-full aspect-[16/9] rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm">
-                        <img src={formData.coverUrlPreview} className="w-full h-full object-cover object-center" alt="Preview" />
+                     <div className="mt-3 w-full aspect-[16/9] rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm relative group">
+                        <img 
+                            src={formData.coverUrlPreview} 
+                            className={`w-full h-full object-cover object-center transition-opacity duration-300 ${imageLoadError ? 'opacity-0' : 'opacity-100'}`} 
+                            alt="Preview" 
+                            onError={() => setImageLoadError(true)}
+                        />
+                        {imageLoadError && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 text-gray-400">
+                                <AlertTriangle size={48} className="mb-2 opacity-50 text-red-300" />
+                                <span className="text-xs font-bold text-gray-500">ไม่สามารถโหลดรูปภาพได้</span>
+                            </div>
+                        )}
+                        <button 
+                            type="button"
+                            onClick={handleRemoveCover}
+                            className="absolute top-2 right-2 p-1.5 bg-white/90 text-red-500 rounded-full shadow-sm hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 z-10"
+                            title="ลบรูปภาพ"
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
                      </div>
                 )}
             </div>
@@ -365,10 +388,10 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                                         <Upload className="w-3 h-3" />
                                         <span>อัปโหลดรูป</span>
                                     </button>
-                                    {item.img && <img src={item.img} className="w-9 h-9 rounded-lg object-cover border border-gray-200" alt="Preview" />}
+                                    {item.img && <img src={item.img} className="w-9 h-9 rounded-lg object-cover border border-gray-200" alt="Preview" onError={(e) => e.currentTarget.style.display = 'none'} />}
                                 </div>
                             </div>
-                            <button onClick={() => removeItemRow(idx)} className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg mt-0.5"><X className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => removeItemRow(idx)} className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg mt-0.5"><X className="w-4 h-4" /></button>
                         </div>
                     ))}
                 </div>
