@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { PopulatedBox, Item, Record, RecordStatus } from '../types';
 import { Button, Input, Modal, Select } from '../components/Common';
 import * as DB from '../services/db';
-import { Plus, Edit, Trash, Search, Upload, Image as ImageIcon, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
+import { Plus, Edit, Trash, Search, Upload, Image as ImageIcon, AlertTriangle, X, CheckCircle2, Copy, Loader2 } from 'lucide-react';
 
 interface AdminDashboardProps {
   boxes: PopulatedBox[];
@@ -69,6 +69,10 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteTargetBox, setDeleteTargetBox] = useState<PopulatedBox | null>(null);
+  
+  // New: Loading state for duplication
+  const [duplicatingBoxId, setDuplicatingBoxId] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCreate = async () => {
@@ -157,6 +161,18 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
       setIsModalOpen(true);
   };
   
+  const handleDuplicateBox = async (box: PopulatedBox) => {
+      if (confirm(`ยืนยันการทำซ้ำกล่อง "${box.boxName}" ?`)) {
+          setDuplicatingBoxId(box.boxId);
+          const result = await DB.duplicateBox(box.boxId);
+          setDuplicatingBoxId(null);
+          
+          if (!result.success) {
+              alert(`เกิดข้อผิดพลาดในการทำซ้ำกล่อง: ${result.error}`);
+          }
+      }
+  };
+
   const handleRequestDeleteBox = (box: PopulatedBox) => {
       setDeleteTargetBox(box);
   };
@@ -235,6 +251,14 @@ const BoxManagementView: React.FC<{ boxes: PopulatedBox[] }> = ({ boxes }) => {
                          )}
                     </div>
                     <div className="flex space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            className="text-gray-400 hover:text-primary p-1.5 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                            onClick={(e) => { e.stopPropagation(); handleDuplicateBox(box); }}
+                            title="ทำซ้ำกล่อง"
+                            disabled={duplicatingBoxId === box.boxId}
+                        >
+                            {duplicatingBoxId === box.boxId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                        </button>
                         <button 
                             className="text-gray-400 hover:text-secondary-dark p-1.5 hover:bg-yellow-50 rounded-lg transition-colors"
                             onClick={(e) => { e.stopPropagation(); handleEditBox(box); }}

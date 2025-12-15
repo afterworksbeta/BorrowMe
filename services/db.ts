@@ -605,6 +605,64 @@ export const createBox = async (name: string, type: string, coverUrl: string, ne
     return { success: true };
 };
 
+export const duplicateBox = async (boxId: string): Promise<{ success: boolean, error?: string }> => {
+    try {
+        // 1. Fetch Source Box
+        const { data: box, error: boxError } = await supabase.from('boxes').select('*').eq('box_id', boxId).single();
+        if (boxError || !box) return { success: false, error: boxError?.message || 'Box not found' };
+
+        // 2. Fetch Source Items
+        const { data: items, error: itemsError } = await supabase.from('items').select('*').eq('box_id', boxId);
+        if (itemsError) return { success: false, error: itemsError.message };
+
+        // 3. Create New Box
+        // Use a more random ID to prevent collisions and ensure clean state
+        const timestamp = Date.now();
+        const randomSuffix = Math.floor(Math.random() * 10000).toString();
+        const newBoxId = `b${timestamp}-${randomSuffix}`;
+        const newBoxName = `${box.box_name} (Copy)`;
+
+        const { error: createError } = await supabase.from('boxes').insert([{
+            box_id: newBoxId,
+            box_name: newBoxName,
+            box_type: box.box_type,
+            cover_image_url: box.cover_image_url,
+            created_at: new Date().toISOString() // Important for sorting
+        }]);
+
+        if (createError) return { success: false, error: createError.message };
+
+        // 4. Duplicate Items
+        if (items && items.length > 0) {
+            const newItems = items.map((item: any, idx: number) => ({
+                item_id: `i${timestamp}-${idx}-${Math.floor(Math.random() * 10000)}`,
+                box_id: newBoxId,
+                item_name: item.item_name,
+                item_image_url: item.item_image_url,
+                item_status: 'available', // Reset status to available
+                created_at: new Date().toISOString()
+            }));
+
+            const { error: itemsInsertError } = await supabase.from('items').insert(newItems);
+            if (itemsInsertError) {
+                console.error('Duplicate Items Error:', itemsInsertError);
+                // Return success false even if box created? 
+                // Better to warn user. For now, fail hard so they know.
+                return { success: false, error: 'Box created but items failed to copy.' };
+            }
+        }
+
+        // Small delay to ensure DB propagation before fetching
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        notify();
+        return { success: true };
+    } catch (e: any) {
+        console.error('Duplicate Exception:', e);
+        return { success: false, error: e.message };
+    }
+};
+
 export const updateBox = async (boxId: string, boxUpdate: Partial<Box>, itemsConfig: {name: string, img: string, qty: number}[]): Promise<{ success: boolean, error?: string }> => {
     // Update Box
     const updatePayload: any = { updated_at: new Date().toISOString() };
